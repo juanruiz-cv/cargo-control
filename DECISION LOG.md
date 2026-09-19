@@ -22,6 +22,7 @@ change to the project must be recorded here and/or as an ADR file under
 | 12 | Identity & access (ADR 0007): Supabase Auth + permission-driven RLS, 7 roles (guard split), 20-permission catalog, server-side enforcement | Accepted | 2026-09-19 |
 | 13 | CAMIONES trucks module (ADR 0008): 13 display states derived (5 fleet base kept), entry/exit as movements, lazy loading | Accepted | 2026-09-19 |
 | 14 | CARGAMENTOS cargo module (ADR 0009): divisible merchandise via item lots + movement spine, currentLocation derived, category/observations columns (v4) | Accepted | 2026-09-19 |
+| 15 | Motor de movimientos movement engine (ADR 0010): transactional contract over the spine, return_to_truck kind, operation_key idempotency (v5) | Accepted | 2026-09-19 |
 
 ## Record 1 — Bootstrap on Supabase (no NestJS)
 
@@ -280,3 +281,34 @@ cannot be hand-edited); currentLocation cannot go stale; QA written against
 existing invariants and the kind map. See `docs/adr/0009-cargo-module-divisible-merchandise.md`,
 `docs/ux/cargo-module.md`, `docs/domain/entities.md` (Cargo),
 `docs/architecture/database.md` §4.6, `docs/qa/cargo-module-tests.md`.
+
+## Record 15 — Motor de movimientos movement engine (ADR 0010)
+
+**Context:** Fase 9 (Prompt 10) requires the movement core: every physical
+modification produces a movement; never edit location directly; transfers
+validate availability, destination capacity, source/destination state and
+permissions; critical operations transactional; avoid negative inventory,
+double transfer, over capacity, duplicate operation; a timeline read
+(origin, destination, quantity, date, user) and audit.
+
+**Decision:** the engine is a **contract over the existing append-only
+spine** (ADR 0004) plus capacity guards (ADR 0006) and the kind → permission
+map (ADR 0007). All prompt types map to existing kinds except
+`RETURN_TO_TRUCK`, added as a new CHECK constant `return_to_truck` (remnant
+back on a truck without egress; maps to `cargo.transfer`). Movement status
+is **applied = persisted**; rejected attempts never persist as movements and
+are recorded in `audit_log` (outcome `failed` + reason + `operation_key`).
+Schema v5 delta: one CHECK constant, nullable `movements.operation_key`
+with a partial unique index per org (idempotency → duplicate replay
+rejected), timeline covered by the existing `movements_org_time_idx`
+(asserted — no extra index). Concurrency safety = row locks `FOR UPDATE`
+(same proven pattern as the ADR 0006 capacity guard). No policy edits, no
+new permission codes.
+
+**Consequences:** engine operations are all-or-nothing (no partial state);
+double transfer and over-capacity races serialize at the lock and reject
+the loser; retries are safe via `operation_key`; the timeline and audit
+reads reuse existing RLS. Concurrency and edge cases specified as ME-*
+scenarios. See `docs/adr/0010-movement-engine.md`,
+`docs/architecture/movement-engine.md`, `docs/ux/movements-timeline.md`,
+`docs/qa/movement-engine-tests.md`.
