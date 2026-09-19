@@ -6,7 +6,7 @@ Track every load from arrival to departure: trucks, cargo units, warehouse
 movements, scale and scanner checkpoints, quarantines, seizures, and complete
 audit trails.
 
-> **Status: Fase 3 — Architecture: data model.** This repository currently contains
+> **Status: Fase 5 — Architecture: capacity & occupancy.** This repository currently contains
 > architecture and domain documentation only. No business features are
 > implemented yet by design. No fictional data is seeded that could be confused
 > with production data.

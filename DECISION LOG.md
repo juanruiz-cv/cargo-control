@@ -18,6 +18,7 @@ change to the project must be recorded here and/or as an ADR file under
 | 8 | Physical location vs visual layout separation (facilities/locations vs layouts/elements) | Accepted | 2026-09-19 |
 | 9 | Movement spine + specialized operations; Fase 3 table renames | Accepted | 2026-09-19 |
 | 10 | Floor plan editor element taxonomy + schema v2 (physical/visual sync via layout scale) | Accepted | 2026-09-19 |
+| 11 | Capacity & occupancy: derived occupancy, DB-enforced guard, audit (ADR 0006) | Accepted | 2026-09-19 |
 
 ## Record 1 — Bootstrap on Supabase (no NestJS)
 
@@ -165,3 +166,29 @@ one taxonomy drives editor defaults (icons/colors) and the link rule; the
 editor structurally cannot corrupt stock truth. See
 `docs/adr/0005-floor-plan-editor-taxonomy.md` and
 `docs/architecture/floor-plan-editor.md`.
+
+## Record 11 — Capacity & occupancy: derived occupancy, DB guard, audit
+
+**Context:** Fase 5 requires per-location capacity in three dimensions (kg,
+m³, units) with max/used/available/% display; negative quantities or
+capacities, occupancy above capacity, and capacity reductions below current
+occupancy are forbidden; every capacity change must be audited. There was no
+per-lot volume source, and the invariants needed an enforcement home.
+
+**Decision:** keep occupancy **derived** from `item_lots` at rest at the
+location (D7) — weight = Σ qty × unit_weight, volume = Σ qty × unit_volume,
+units = Σ qty with `uom='unit'`; holds count, trucks don't; missing
+weight/volume data is flagged, not zeroed. Add `unit_volume_m3` to
+`cargo_items`/`item_lots` (schema v3) as the volume source. Enforce in the
+database: `CHECK` on quantity and capacity; a placement guard trigger
+(serialized per location via row lock) rejects overflow; a capacity guard
+rejects reduction below occupancy; `NULL` capacity = unlimited; occupancy ==
+capacity allowed. Every accepted capacity change appends an `audit_log`
+`capacity.set` row; rejected attempts write nothing and are not audited.
+
+**Consequences:** the four metrics are pure read-side projections; the editor
+and app layer cannot corrupt occupancy (it is never written). Placement guard
+is fully effective only where weight/volume data exists, motivating capture of
+`missing_*` lots. Small v3 delta (2 columns + view + 3 triggers), no renames.
+See `docs/adr/0006-capacity-occupancy-invariants.md`,
+`docs/domain/capacity-occupancy.md`, `docs/qa/capacity-occupancy-tests.md`.
