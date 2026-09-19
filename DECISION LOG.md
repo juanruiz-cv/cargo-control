@@ -20,6 +20,8 @@ change to the project must be recorded here and/or as an ADR file under
 | 10 | Floor plan editor element taxonomy + schema v2 (physical/visual sync via layout scale) | Accepted | 2026-09-19 |
 | 11 | Capacity & occupancy: derived occupancy, DB-enforced guard, audit (ADR 0006) | Accepted | 2026-09-19 |
 | 12 | Identity & access (ADR 0007): Supabase Auth + permission-driven RLS, 7 roles (guard split), 20-permission catalog, server-side enforcement | Accepted | 2026-09-19 |
+| 13 | CAMIONES trucks module (ADR 0008): 13 display states derived (5 fleet base kept), entry/exit as movements, lazy loading | Accepted | 2026-09-19 |
+| 14 | CARGAMENTOS cargo module (ADR 0009): divisible merchandise via item lots + movement spine, currentLocation derived, category/observations columns (v4) | Accepted | 2026-09-19 |
 
 ## Record 1 — Bootstrap on Supabase (no NestJS)
 
@@ -251,3 +253,30 @@ scales without full-table scans. See
 `docs/adr/0008-truck-module-derived-status.md`,
 `docs/ux/trucks-module.md`, `docs/domain/states.md` (§truck_status display
 map), `docs/qa/truck-module-tests.md`.
+
+## Record 14 — CARGAMENTOS cargo module (ADR 0009)
+
+**Context:** Fase 8 requires the cargo module UI with per-item fields
+(description, category, quantity, unit, weight, volume, identifier, status,
+currentLocation, observations), create/edit/view/split/transfer, and
+explicitly divisible merchandise with traceability via movements (origin,
+destination, quantity, user, date, truck, merchandise, observations).
+
+**Decision:** the module is spec + QA **over the existing ADR 0003 model** —
+`item_lots` (traceability quantum, Σ leaf = `total_quantity` invariant
+trigger) and the append-only movement spine already deliver divisibility
+(100 → 40/30/20/10) and full traceability. Added two nullable columns to
+`cargo_items` (schema v4): `category` (display/grouping label, not an
+authorization axis) and `observations` (item-level notes; operation
+observations stay in `movement_items.notes` / `movements.reason`).
+`currentLocation` is **derived from active lot placement, never stored**;
+`identifier` maps to existing `sku`. Split = `split` movement
+(`cargo.update`), transfer = `transfer` movement (`cargo.transfer`) — both
+append-only, server-authorized. No new permission codes, no policy edits.
+
+**Consequences:** small v4 delta (2 nullable columns, no migration);
+divisible merchandise and traceability are structural (cannot lose quantity,
+cannot be hand-edited); currentLocation cannot go stale; QA written against
+existing invariants and the kind map. See `docs/adr/0009-cargo-module-divisible-merchandise.md`,
+`docs/ux/cargo-module.md`, `docs/domain/entities.md` (Cargo),
+`docs/architecture/database.md` §4.6, `docs/qa/cargo-module-tests.md`.
