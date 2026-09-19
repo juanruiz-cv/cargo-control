@@ -1,30 +1,29 @@
 # odd mirror — Fase 21 (Complete documentation doctrine)
 
-> Tracking mirror (odd doctrine ODD §T6). This mirror == the NAMED
-> phase home in docs/qa/documentation-tests.md DOC-AS-2 (the index names
-> it; DOC-AS-2 fails it untracked). Mirrors docs/home of the documentation
-> phase: ADR 0020 (docs/adr/0020-documentation-doctrine.md), doctrine
-> (docs/architecture/documentation.md), domain home (docs/domain/README.md),
-> QA asserts (docs/qa/documentation-tests.md DOC-AS-*), README status
-> (l9 = "Fase 21"), DECISION LOG Record 22 (ADR 0020).
+> Tracking mirror per DOC-5 (odd/tasks = the tracking home, decided in
+docs/architecture/documentation.md §7; odd doctrine ODD §T6
+mirror-per-fase). Mirror == the documentation doctrine tracking home
+for Fase 21; it mirrors what the tax-disco (README index DOC-1/DOC-2 +
+ADR 0020 DOC-1..DOC-8 + docs/qa/documentation-tests.md DOC-AS-*
+DOC-AS-1..7) asserts. DOC-AS-2: every home the README index names ==
+tracked (ls-files) — if this odd mirror is untracked, the index
+compiles a home git does not track = DOC-AS-2 defect (asserted here).
 
-## Close status
+## Fase 21 close — paths this mirror tracks (DOC-AS-2: all tracked)
 
-Fase 21 closed in commits 3d77800 (ADR 0020) → 693b28e (doctrine) →
-b2bf266 (domain home) → 383223d (QA DOC-AS-*) → (this close). Tracked
-paths (DOC-AS-2: every home the index names must be in git ls-files):
+- docs/adr/0020-documentation-doctrine.md — ADR 0020 (commit 3d77800)
+- docs/architecture/documentation.md — documentation doctrine home
+  (commit 693b28e)
+- docs/domain/README.md — domain home (commit b2bf266)
+- docs/qa/documentation-tests.md — documentation QA spec DOC-AS-*
+  (commit 383223d)
+- DECISION LOG.md "## Record 22 ..." — the close Record (DECISION
+  LOG Record 22, appended in this close)
+- README.md l9 "Fase 21" — index bump (DOC-AS-1/3)
+- odd/tasks/fase21-documentation.md — THIS mirror (tracked in this
+  close)
 
-- docs/adr/0020-documentation-doctrine.md
-- docs/architecture/documentation.md
-- docs/domain/README.md
-- docs/qa/documentation-tests.md
-- odd/tasks/fase21-documentation.md (this mirror)
-
-## Assert failure map (DOC-AS-*)
-
-DOC-AS-1 README l9 == current Fase; DOC-AS-2 index home == tracked
-(git ls-files); DOC-AS-3 one deciding home per topic; DOC-AS-4 security
-home = docs/security/ (never restated by this doctrine); DOC-AS-5 ADR
-0001-0020 each with a DECISION LOG Record; DOC-AS-6 odd mirror tracked;
-DOC-AS-7 documentation QA spec exists + tracked. Nothing in this mirror
-restates RLS/RBAC/realm/schema/policy (DOC-AS-4; RLS/RBAC home = docs/security/).
+Defect response (DOC-AS-2): a path the README index names (README
+§Docs index) that git does not track = the index names a home that
+is not on disk-tracked = DOC-AS-2 fail → track it in the same close
+commit (this commit), never leave a "documented" home untracked.
