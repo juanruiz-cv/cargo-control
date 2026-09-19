@@ -32,25 +32,36 @@ or transferred. State lives at lot level; a manifest's status is a rollup.
     (arrival facility), 1─N `movements` (where it happened).
   - Future multi-warehouse = one facility per warehouse; no schema change.
 
-### Physical vs visual (ADR 0004)
+### Physical vs visual (ADR 0004 + ADR 0005)
 
 - **location** — operational node: `id`, `organization_id`, `facility_id`,
   `parent_id` (zone → bin tree), `type (zone|bin|playon|checkpoint)`,
   `checkpoint_kind (scan|scale|control)` when type=checkpoint, `code` (unique
-  per facility), `capacity_qty`, `capacity_kg`, `allows_hold`,
+  per facility), `name`, physical dimensions `physical_width/height/depth` +
+  `physical_unit (m|cm|ft)`, capacity `capacity_max_units`,
+  `capacity_max_kg`, `capacity_max_volume_m3`, `allows_hold`,
   `requires_authorization`, `notes`, `active`.
-  - **Owns:** capacity + operational rules. **Derives:** occupancy and
-    inventory from `item_lots` — never stored.
-  - **Has no visual fields.** Cardinality: N : (0..1) `parent_id` (self).
+  - **Owns:** physical dimensions, capacity and operational rules.
+    **Derives:** occupancy and inventory from `item_lots` — never stored.
+  - **Has no visual fields.** Floor plan editor element types map to these
+    physical types (ADR 0005). Cardinality: N : (0..1) `parent_id` (self).
 - **layout** — a named, versioned map: `id`, `facility_id`, `name`, `version`,
-  `status (draft|published|archived)`, `background jsonb`.
-  - 1─N `layout_elements`; 1─N per facility.
-- **layout_element** — presentation record: `id`, `layout_id`, `location_id`
-  (nullable; markers only), `kind (location_marker|shape|label|decoration)`,
-  `x`, `y`, `width`, `height`, `rotation`, `color`, `icon`, `z_index`, `label`.
+  `status (draft|published|archived)`, `scale` (px per meter, default 20),
+  `background jsonb`.
+  - 1─N `layout_elements`; 1─N per facility. `scale` is the only bridge between
+    physical (m) and visual (px).
+- **layout_element** — presentation record (editor element, ADR 0005):
+  `id`, `layout_id`, `location_id` (nullable; place types require it,
+  corridor/door/other may be visual-only), `element_type (playon|warehouse|
+  storage|scanner|scale|quarantine|seizure|corridor|door|other)`, `code`,
+  `name`, `description`, `x`, `y`, `visual_width`, `visual_height`,
+  `rotation`, `color`, `icon`, `z_index`, `label`, `is_locked`, `is_visible`.
   - N : (0..1) `locations`. A location may appear in **zero or many** layouts;
-    a layout may contain decorative elements with no location link.
-  - Deleting/archiving a location never removes its markers.
+    a layout may contain non-place elements with no location link.
+  - Deleting/archiving a location never removes its markers; deleting an
+    element never deletes its location.
+  - **Physical ≠ visual:** visual dims are px; the linked location's physical
+    dims are in meters and only bridged by `layouts.scale` (never auto-synced).
 
 ### Identity & access
 
@@ -174,8 +185,9 @@ rewrite history. See `flows.md` for guards.
   (DB-trigger enforced after every split/transfer, ADR 0003).
 - **Placement:** a lot is at exactly one physical place — a `location` or a
   `truck`; never both, never a layout.
-- **Location/layout separation (ADR 0004):** locations carry no visual data;
-  layout elements carry no operational data.
+- **Location/layout separation (ADR 0004 + ADR 0005):** locations carry no
+  visual data; layout elements carry no operational data; physical (m) and
+  visual (px) dimensions only bridge via `layouts.scale`.
 - **Immutable spine:** movements/audit rows are never updated or deleted;
   corrections reference the original.
 - Partial discharge keeps the remainder as an `on_truck` lot (remanente).

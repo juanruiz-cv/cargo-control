@@ -13,7 +13,7 @@ RLS on every business table, no `bypassrls` for the data API).
 
 | # | Decision | Consequence |
 | - | -------- | ----------- |
-| D1 | Physical location and visual layout are **two independent submodels** (ADR 0004) | Layout edits can never corrupt stock truth |
+| D1 | Physical location and visual layout are **two independent submodels** (ADR 0004 + editor taxonomy ADR 0005) | Layout edits can never corrupt stock truth |
 | D2 | `movements` + `movement_items`: normalized append-only spine | One event can affect several lots; per-lot detail is queryable |
 | D3 | Specialized operations (`scanner`/`scale`/`quarantine`/`seizure`) attach to movements | Device-level data lives outside the domain spine |
 | D4 | Tenancy: `organizations` → `facilities` → `locations` | Multi-org and multi-facility from day one; multi-warehouse is more facilities |
@@ -70,7 +70,7 @@ attachments , audit_log ── polymorphic many-to-one (entity_type, entity_id)
 | `locations.parent_id` | `locations` | N : (0..1) | zone → bin tree |
 | `layouts.facility_id` | `facilities` | N : 1 | |
 | `layout_elements.layout_id` | `layouts` | N : 1 | CASCADE on layout delete |
-| `layout_elements.location_id` | `locations` | N : (0..1) | markers only; never deletes with the location |
+| `layout_elements.location_id` | `locations` | N : (0..1) | place types require it; `corridor`/`door`/`other` may be visual-only (ADR 0005); never deletes with the location |
 | `users.organization_id` | `organizations` | N : 1 | MVP: one org per user |
 | `users.auth_user_id` | `auth.users` | 1 : 1 | created by trigger on signup |
 | `user_roles.user_id` | `users` | N : 1 | CASCADE |
@@ -182,8 +182,16 @@ create table public.locations (
   checkpoint_kind      text check (checkpoint_kind in ('scan','scale','control')),
   code                 text not null,           -- unique per facility
   name                 text,
-  capacity_qty         numeric check (capacity_qty is null or capacity_qty >= 0),
-  capacity_kg          numeric check (capacity_kg  is null or capacity_kg  >= 0),
+  -- physical (real-world) dimensions; DISJOINT from visual px (ADR 0005)
+  physical_width       numeric check (physical_width  is null or physical_width  > 0),
+  physical_height      numeric check (physical_height is null or physical_height > 0),
+  physical_depth       numeric check (physical_depth  is null or physical_depth  > 0),
+  physical_unit        text not null default 'm'
+                       check (physical_unit in ('m','cm','ft')),
+  -- capacity (advisory maxima; occupancy is derived from item_lots, D7)
+  capacity_max_units       numeric check (capacity_max_units is null or capacity_max_units >= 0),
+  capacity_max_kg          numeric check (capacity_max_kg    is null or capacity_max_kg    >= 0),
+  capacity_max_volume_m3   numeric check (capacity_max_volume_m3 is null or capacity_max_volume_m3 >= 0),
   allows_hold          boolean not null default false,  -- rezago/secuestro staging
   requires_authorization boolean not null default false,
   notes                text,
@@ -214,6 +222,7 @@ create table public.layouts (
   version         int  not null default 1,
   status          text not null default 'draft'
                   check (status in ('draft','published','archived')),
+  scale           numeric not null default 20 check (scale > 0), -- px per meter
   background      jsonb,                   -- canvas meta (color/image/grid)
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
@@ -224,24 +233,30 @@ create index layouts_facility_idx on public.layouts (facility_id);
 create table public.layout_elements (
   id          uuid primary key default gen_random_uuid(),
   layout_id   uuid not null references public.layouts(id) on delete cascade,
-  location_id uuid references public.locations(id),  -- markers only; location
-                                                     -- deactivation never
-                                                     -- removes the element
-  kind        text not null default 'location_marker'
-              check (kind in ('location_marker','shape','label','decoration')),
-  x           numeric not null default 0,
+  location_id uuid references public.locations(id),  -- place elements; the
+                                                     -- editor taxonomy (ADR 0005)
+  element_type text not null default 'other'
+               check (element_type in ('playon','warehouse','storage','scanner',
+                                       'scale','quarantine','seizure',
+                                       'corridor','door','other')),
+  code        text,            -- visual-only elements; places inherit location.code
+  name        text,            -- display name; falls back to location.name
+  description text,
+  x           numeric not null default 0,             -- px, top-left origin
   y           numeric not null default 0,
-  width       numeric,
-  height      numeric,
-  rotation    numeric not null default 0,
+  visual_width  numeric check (visual_width  is null or visual_width  > 0),
+  visual_height numeric check (visual_height is null or visual_height > 0),
+  rotation    numeric not null default 0,             -- degrees
   color       text,
   icon        text,
   z_index     int  not null default 0,
   label       text,
+  is_locked   boolean not null default false,   -- editor: protected from edits
+  is_visible  boolean not null default true,    -- editor: hide keeps the data
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
-  constraint marker_requires_location check (
-    (kind = 'location_marker') = (location_id is not null)
+  constraint place_elements_require_location check (
+    (element_type in ('corridor','door','other')) or (location_id is not null)
   )
 );
 create index layout_elements_layout_idx   on public.layout_elements (layout_id);
@@ -664,6 +679,15 @@ becomes necessary, replace with a `X_attachments` join per target type.
 | `documents` | `attachments` | rename |
 | `audit_log` | unchanged | — |
 
+Schema **v2** (Fase 4 floor plan editor, ADR 0005): `layout_elements.kind` →
+`element_type` (editor taxonomy `playon|warehouse|storage|scanner|scale|
+quarantine|seizure|corridor|door|other`); `width/height` →
+`visual_width/visual_height`; added `is_locked`, `is_visible`, `code`, `name`,
+`description`; marker rule relaxed (place types require a location; corridor/
+door/other may be visual-only). `locations` gain `physical_*` dimensions,
+`physical_unit` and `capacity_max_units/kg/volume_m3` (was `capacity_qty`,
+`capacity_kg`). `layouts` gain `scale` (px per meter).
+
 ## 8. Design rules (enforced in the data layer)
 
 - `movements`, `movement_items`, `audit_log` are **append-only**: corrections are
@@ -677,6 +701,9 @@ becomes necessary, replace with a `X_attachments` join per target type.
   never in-place updates.
 - Location capacity is advisory metadata; **occupancy/inventory derive from
   `item_lots`** — never write them as columns (D7).
+- **Physical ≠ visual (ADR 0005):** physical dimensions (meters) and visual
+  dimensions (pixels) never auto-sync; the only bridge is `layouts.scale`
+  (px/m), used read-side for conversions.
 - RLS default-deny on every table; append-only tables expose no UPDATE/DELETE;
   attachments readable through signed Storage URLs only.
   See `docs/domain/business-rules.md` and `docs/security/rls.md`.
