@@ -110,10 +110,15 @@ or transferred. State lives at lot level; a manifest's status is a rollup.
   `type (shipper|client)`, `name`, `tax_id`, `contacts`, `status`.
   (Carriers live in `transport_companies`, not here.)
 - **cargo_item** — merchandise line with total quantity: `id`, `manifest_id`,
-  `line_number`, `sku`, `description`, `total_quantity` (>0), `uom`,
+  `line_number`, `sku` (identifier), `description`, `category` (Fase 8:
+  display/grouping label, optional), `total_quantity` (>0), `uom`,
   `unit_weight_kg`, `unit_volume_m3` (volume source, Fase 5),
-  `status (pending|on_truck|discharged|distributed|closed)`.
+  `status (pending|on_truck|discharged|distributed|closed)`,
+  `observations` (Fase 8: item-level notes).
   - **Invariant:** Σ leaf lot quantities = `total_quantity` (trigger, ADR 0003).
+  - **currentLocation (Fase 8, ADR 0009 §4):** **derived, never stored** —
+    the item's current placement is the rollup of its active lots
+    (each lot's `current_location_id` / `current_truck_id` + quantity).
 - **item_lot** — the traceability quantum: `id`, `manifest_id`, `cargo_item_id`,
   `parent_lot_id` (chained splits), `quantity` (>0), `uom`, `status`, physical
   placement `current_location_id` **or** `current_truck_id` (never both),

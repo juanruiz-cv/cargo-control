@@ -45,6 +45,14 @@ Entry/exit for display: ingreso = first `arrival` movement timestamp; egreso
 ## cargo_item_status
 `pending` (receives → `on_truck`) | `discharged` | `distributed` | `closed`
 
+### cargo_item status display (Fase 8, ADR 0009)
+
+The item `status` is stored state; the UI also renders **placements**
+(currentLocation rollup) from active `item_lots` — never a separate
+column. `pending` → `on_truck` after the truck's arrival is confirmed;
+splits/transfers do not change the item status directly (they create
+movements; rollup follows `flows.md`).
+
 ## item_lot_status
 - `on_truck` — remnant still on the truck (remanente)
 - `discharged` — discharged at playón/control
