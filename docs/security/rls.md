@@ -18,9 +18,11 @@ operation, `-` denies. **Default deny**: anything not listed is denied.
 | orgs                | Y     | Y          | Y        | Y     | Y       |
 | operators           | Y     | –          | –        | –     | –       |
 | parties             | Y     | Y          | Y        | Y     | Y       |
+| drivers             | Y     | Y          | Y        | Y     | Y       |
 | trucks              | Y     | Y          | Y        | Y     | Y       |
 | cargo               | Y     | Y          | Y        | Y     | Y       |
-| cargo_units         | Y     | Y          | Y        | Y     | Y       |
+| cargo_items         | Y     | Y          | Y        | Y     | Y       |
+| item_lots           | Y     | Y          | Y        | Y     | Y       |
 | warehouse_locations| Y     | Y          | Y        | Y     | Y       |
 | checkpoint_events   | Y     | Y          | Y        | Y     | Y       |
 | scale_readings      | Y     | Y          | Y        | Y     | Y       |
@@ -34,8 +36,8 @@ operation, `-` denies. **Default deny**: anything not listed is denied.
 | Operation                    | admin | supervisor | operator | guard |
 | ---------------------------- | :---: | :--------: | :------: | :---: |
 | operators / settings          | Y     | –          | –        | –     |
-| parties, trucks, locations    | Y     | Y          | Y        | –     |
-| cargo, cargo_units            | Y     | Y          | Y        | –     |
+| parties, trucks, locations, drivers | Y     | Y          | Y        | –     |
+| cargo, cargo_items, item_lots       | Y     | Y          | Y        | –     |
 | checkpoint_events (append)    | Y     | Y          | Y        | Y     |
 | quarantine resolve            | Y     | Y          | –        | –     |
 | seizure open/resolve          | Y     | Y          | –        | –     |

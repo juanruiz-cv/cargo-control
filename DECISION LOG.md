@@ -14,6 +14,7 @@ change to the project must be recorded here and/or as an ADR file under
 | 4 | Immutable, append-only checkpoint event log | Accepted | 2026-09-19 |
 | 5 | English for all technical artifacts and code | Accepted | 2026-09-19 |
 | 6 | Brand system: token-based design system, Inter, Lucide, status semantics | Accepted | 2026-09-19 |
+| 7 | Quantity + lots merchandise model (item_lot), partial discharge with on_truck remnant | Accepted | 2026-09-19 |
 
 ## Record 1 — Bootstrap on Supabase (no NestJS)
 
@@ -77,3 +78,21 @@ full token architecture (`--cc-*`). Components are specified in
 **Consequences:** zero arbitrary colors; any palette change requires updating
 `colors.md` + `design-tokens.md` and a decision log entry. See
 `docs/adr/0002-brand-system.md`.
+
+## Record 7 — Quantity + lots merchandise model
+
+**Context:** Fase 2 domain definition requires merchandise that can be split
+into any quantities (1000 units → 300/250/150/100/100/100) and a truck that can
+keep part of the load (partial discharge, remnant on truck).
+
+**Decision:** Model merchandise as `cargo_item` (line with `total_quantity`)
+whose quantities are allocated into **lots** (`item_lot`: quantity, location,
+state, `parent_lot_id` for chained splits). Balance invariant
+Σ leaf lots = item total, enforced by trigger. Stock state lives at lot level;
+cargo status is a rollup. Introduce `driver` registry; `on_truck` remnant via
+`location_type=truck`.
+
+**Consequences:** natural fit for arbitrary splitting and partial discharge;
+event volume grows with lots (mitigated in `docs/architecture/risks.md`);
+replaces the atomic-`cargo_unit`-only model (barcode scanning remains a
+secondary option per lot). See `docs/adr/0003-item-lot-quantity-model.md`.

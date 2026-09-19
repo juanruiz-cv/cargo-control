@@ -57,14 +57,14 @@ triggers, RLS) and, where needed, in Edge Functions — never only in React.
 | Module       | Purpose                                                        |
 | ------------ | -------------------------------------------------------------- |
 | Dashboard    | KPIs, pending tasks, alerts                                    |
-| Trucks       | Fleet registry, capacity, status                              |
-| Cargo        | Shipment/cargo units tracking and lifecycle                    |
-| Warehouse    | Locations, zones, bins, stock                                  |
-| Scanner      | Barcode/QR capture of units at checkpoints                     |
+| Trucks       | Fleet registry, drivers, capacity, status                      |
+| Cargo        | Shipments/items/lots tracking and lifecycle                    |
+| Warehouse    | Locations, zones, bins, lot stock                              |
+| Scanner      | Barcode/QR capture of lots at checkpoints                      |
 | Scale        | Weighing checkpoint, tolerance validation                      |
-| Quarantine   | Held cargo cases and resolution                                |
-| Seizure      | Seized cargo records and legal handling                        |
-| Movements    | Event trail of warehouse movements                             |
+| Quarantine   | **Rezago** cases and resolution                                |
+| Seizure      | **Secuestro** records and legal handling                       |
+| Movements    | Event trail of lots and movements                              |
 | Reports      | Operational and traceability reports                           |
 | Audit        | Full audit log browser                                         |
 | Settings     | Roles, permissions, catalog/configuration                      |
@@ -75,14 +75,16 @@ Details: `docs/product/README.md`, `docs/domain/entities.md`.
 
 - `operator` — internal users with roles
 - `party` — carrier, shipper, client (counterparty catalog)
+- `driver` — conductor registry (external, not an app user)
 - `truck` — vehicle carrying goods
 - `cargo` — a shipment/load being tracked
-- `cargo_unit` — physical unit of a cargo (scan/scale target)
-- `warehouse_location` — zone/bin/hierarchy for storage
-- `checkpoint_event` — immutable movement/scan/scale event (traceability spine)
-- `scale_reading` — weight record tied to a unit
-- `quarantine_case` — goods held pending resolution
-- `seizure_record` — goods seized
+- `cargo_item` — merchandise line with total quantity (1000 units example)
+- `item_lot` — quantized lot (quantity, location, state; parent for splits)
+- `warehouse_location` — zone/bin/hierarchy for storage (+ checkpoints)
+- `checkpoint_event` — immutable event (arrival/split/scan/scale/hold/…) spine
+- `scale_reading` — weight record tied to a lot
+- `quarantine_case` — **rezago** goods held pending resolution
+- `seizure_record` — **secuestro** goods seized, blocked
 - `document` — file attachment (manifest, photo) kept in Storage
 - `audit_log` — admin/relevant changes with actor and reason
 
@@ -151,17 +153,19 @@ tenant/org-scoped. Key structures:
 ```
 operators (id, user_id -> auth.users, role, org_id, status)
 parties (id, org_id, type, name, tax_id, contacts)
+drivers (id, org_id, party_id, full_name, document_id, license_no, status)
 trucks (id, org_id, plate, carrier_party_id, capacity_kg, status)
-cargo (id, org_id, code, party ids, origin, destination, status, ...)
-cargo_units (id, cargo_id, unit_code, barcode, weight_kg, status)
+cargo (id, org_id, code, truck_id, driver_id, origins, status, ...)
+cargo_items (id, cargo_id, line, sku, total_quantity, uom, status)
+item_lots (id, cargo_item_id, parent_lot_id, quantity, location_type, status)
 warehouse_locations (...), checkpoint_events (...), scale_readings (...)
 quarantine_cases (...), seizure_records (...), documents (...), audit_log (...)
 ```
 
-Design principles: immutable event log, soft-deletes avoided, timestamps from DB
-(`timestamptz`), UUID primary keys, every mutating table carries
-`created_by`/`updated_by` plus change history. Full DDL sketch:
-`docs/architecture/database.md`.
+Design principles: immutable event log, quantity-balance trigger on lots
+(ADR 0003), soft-deletes avoided, timestamps from DB (`timestamptz`), UUID
+primary keys, every mutating table carries `created_by`/`updated_by` plus change
+history. Full DDL sketch: `docs/architecture/database.md`.
 
 ## 8. Permission strategy
 

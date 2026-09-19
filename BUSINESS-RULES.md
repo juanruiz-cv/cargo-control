@@ -4,32 +4,46 @@ Domain invariants. These rules are enforced in the **data layer**
 (PostgreSQL constraints, triggers, RLS) and additionally in Edge Functions or
 frontend only for UX hints — never as the sole enforcement point.
 
-## Identity and units
+Operating model (Fase 2): merchandisements are **items with quantities split
+into tracked lots** (ADR 0003). State lives at lot level.
 
-- Every cargo and cargo unit has a unique, human-readable code.
-- Physical units are weighed and scanned before they may change location
-  (scale + scanner checkpoint).
-- A unit's weight and scanned identity are recorded as immutable events.
+## Identity and quantities
 
-## Lifecycle
+- Every cargo, item, and lot has a unique, human-readable code.
+- An item's `total_quantity` must be > 0.
+- **Splitting invariant:** for every item, Σ leaf lot quantities =
+  `total_quantity`. Splits/transfers are atomic and the invariant is enforced
+  by a database trigger.
+- Chained splits are allowed (a lot can be split again any number of times),
+  preserving `parent_lot_id`.
 
-- A cargo cannot be released unless all of its units have passed the required
-  checkpoints.
-- A unit under quarantine cannot be released, loaded, or moved to consumer
-  stock until the quarantine case is resolved.
-- A seized unit is frozen: no stock movements allowed except those linked to
-  the seizure record (evidence transfer).
-- Releasing a unit from quarantine or seizure requires a resolution record with
-  actor and reason.
+## Arrival, discharge, and remnant
+
+- Arrival registers truck, driver (registry), carrier company, and the manifest.
+- Discharge can be **total or partial**; a partial discharge leaves the
+  remainder as an `on_truck` lot (remanente).
+- A truck may egress with an acknowledged `on_truck` balance; it can also leave
+  merchandise staged independently.
+
+## Lifecycle and holds
+
+- Lots at scanner/scale checkpoints record events; out-of-tolerance weights
+  raise an alert instead of being silently accepted.
+- A lot under **rezago** (`in_quarantine`) is frozen: no normal stock
+  movements; resolution requires supervisor + reason.
+- A lot under **secuestro** (`seized`) is blocked: only evidence transfer
+  linked to the seizure is allowed; attempted movements are refused and
+  audit-logged.
+- Release from either hold requires a resolution record with actor and reason.
 
 ## Integrity
 
 - The event log (`checkpoint_events`) is append-only: existing rows are never
   updated or deleted; corrections are new events referencing the original.
-- Every mutation records `created_by` and a reason when the change is sensitive
-  (quarantine, seizure, release).
-- Weights fall within tolerance bands; out-of-tolerance readings raise an alert
-  instead of silently accepting.
+- Every merchandise mutation produces a checkpoint event (actor, timestamp,
+  location, quantity, reason when sensitive).
+- Sensitive actions (quarantine, seizure, release, role change) are always
+  audit-logged.
 
 ## Access
 
@@ -43,4 +57,6 @@ frontend only for UX hints — never as the sole enforcement point.
 - Required references are enforced via foreign keys; dangling references are
   prohibited.
 
-Domain model and enums: `docs/domain/entities.md`.
+Domain model: `docs/domain/entities.md` · Flows: `docs/domain/flows.md` ·
+States: `docs/domain/states.md` · Full operational rules:
+`docs/domain/business-rules.md`.
