@@ -1,0 +1,17 @@
+# CODEOWNERS — Cargo Control (ADR 0021 §4 Repository surface)
+
+# Default owner for everything (fallback when no more specific match).
+*       @angelruiz-workflow
+
+# Documentation doctrine homes are owned by the doc steward.
+docs/adr/              @angelruiz-workflow
+docs/architecture/     @angelruiz-workflow
+docs/domain/           @angelruiz-workflow
+docs/qa/               @angelruiz-workflow
+odd/tasks/             @angelruiz-workflow
+
+# Security doctrine homes: security-sensitive changes need the same
+# steward as default owner (single-owner repo; expand when a security
+# champion is named).
+docs/security/         @angelruiz-workflow
+docs/qa/security-tests.md @angelruiz-workflow
