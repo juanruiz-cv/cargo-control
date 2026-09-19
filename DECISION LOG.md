@@ -19,6 +19,7 @@ change to the project must be recorded here and/or as an ADR file under
 | 9 | Movement spine + specialized operations; Fase 3 table renames | Accepted | 2026-09-19 |
 | 10 | Floor plan editor element taxonomy + schema v2 (physical/visual sync via layout scale) | Accepted | 2026-09-19 |
 | 11 | Capacity & occupancy: derived occupancy, DB-enforced guard, audit (ADR 0006) | Accepted | 2026-09-19 |
+| 12 | Identity & access (ADR 0007): Supabase Auth + permission-driven RLS, 7 roles (guard split), 20-permission catalog, server-side enforcement | Accepted | 2026-09-19 |
 
 ## Record 1 — Bootstrap on Supabase (no NestJS)
 
