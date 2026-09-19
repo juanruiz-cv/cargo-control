@@ -63,10 +63,10 @@ Detailed operational rules (Fase 2). Enforced in the data layer
 
 ## 8. Tracing and corrections
 
-- Every merchandise mutation emits a `checkpoint_event`
+- Every merchandise mutation emits a **movement** event
   (actor, timestamp, location, quantity, reason when sensitive).
-- Corrections never modify the original row: a `correction` event references
-  `previous_event_id` (AC-E8-3).
+- Corrections never modify the original row: a `correction` movement references
+  `previous_movement_id` (AC-E8-3).
 - Sensitive actions (quarantine, seizure, release, role change) always write
   to `audit_log` with actor and reason (AC-E9-2).
 
@@ -75,3 +75,24 @@ Detailed operational rules (Fase 2). Enforced in the data layer
 - Operators see only their `org_id` (RLS).
 - No fictional seed that could be confused with production data.
 - Required references enforced by foreign keys; no dangling references.
+
+## 10. Capacity and occupancy (Fase 5, ADR 0006)
+
+- Each location has three **optional** capacity dimensions: `capacity_max_kg`,
+  `capacity_max_volume_m3`, `capacity_max_units`. `NULL` = unlimited.
+- **Occupancy is derived from `item_lots` at rest at the location**
+  (per dimension: weight = Σ qty × unit_weight, volume = Σ qty × unit_volume,
+  units = Σ qty with `uom='unit'`). It is never written as a column.
+- Holds (`in_quarantine`, `seized`) still occupy physical space and count;
+  lots on a truck never count.
+- **Forbidden:** negative `quantity`; negative capacity; a placement that
+  would exceed any known capacity (occupancy == capacity is allowed); a
+  capacity reduction below the current occupancy (`NULL → value` below
+  occupancy is also rejected; `value → NULL` unlocks).
+- A placement that would overflow, or a capacity cut that would under-cut,
+  fails the whole transaction and writes nothing.
+- Lots without weight/volume data are **flagged** (`missing_weight_lots` /
+  `missing_volume_lots`), not summed as zero.
+- Every accepted capacity change appends an `audit_log` row
+  (`action='capacity.set'`, before/after jsonb); rejected attempts leave no
+  audit row. Guard triggers serialize concurrent placements per location.

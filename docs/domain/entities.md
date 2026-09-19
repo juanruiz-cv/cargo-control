@@ -103,13 +103,18 @@ or transferred. State lives at lot level; a manifest's status is a rollup.
   (Carriers live in `transport_companies`, not here.)
 - **cargo_item** — merchandise line with total quantity: `id`, `manifest_id`,
   `line_number`, `sku`, `description`, `total_quantity` (>0), `uom`,
-  `unit_weight_kg`, `status (pending|on_truck|discharged|distributed|closed)`.
+  `unit_weight_kg`, `unit_volume_m3` (volume source, Fase 5),
+  `status (pending|on_truck|discharged|distributed|closed)`.
   - **Invariant:** Σ leaf lot quantities = `total_quantity` (trigger, ADR 0003).
 - **item_lot** — the traceability quantum: `id`, `manifest_id`, `cargo_item_id`,
   `parent_lot_id` (chained splits), `quantity` (>0), `uom`, `status`, physical
   placement `current_location_id` **or** `current_truck_id` (never both),
-  `unit_weight_kg` override, `created_via_movement_id`.
+  `unit_weight_kg` override, `unit_volume_m3` override (Fase 5),
+  `created_via_movement_id`.
   - Placed at a physical `location` or on a `truck`; never in a layout.
+  - Contributes to location occupancy per dimension (ADR 0006): weight =
+    qty × unit_weight, volume = qty × unit_volume, units = qty when
+    `uom='unit'`; lots without weight/volume data are flagged, not zeroed.
 
 ### Traceability
 
@@ -188,6 +193,11 @@ rewrite history. See `flows.md` for guards.
 - **Location/layout separation (ADR 0004 + ADR 0005):** locations carry no
   visual data; layout elements carry no operational data; physical (m) and
   visual (px) dimensions only bridge via `layouts.scale`.
+- **Capacity & occupancy (ADR 0006):** occupancy is derived from `item_lots`
+  (never stored); a placement exceeding any known capacity, or a capacity
+  reduction below current occupancy, is rejected by trigger; `NULL` capacity
+  means unlimited; holds count toward occupancy; every accepted capacity
+  change is audit-logged.
 - **Immutable spine:** movements/audit rows are never updated or deleted;
   corrections reference the original.
 - Partial discharge keeps the remainder as an `on_truck` lot (remanente).
