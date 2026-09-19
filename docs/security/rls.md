@@ -81,6 +81,15 @@ Notes:
 - **Views:** created with `security_invoker = true` so base policies apply
   (`location_occupancy`, future read models).
 
+## Fase 7 trucks module — no policy change (ASSERTED)
+
+The CAMIONES module (Fase 7, ADR 0008) reuses the existing `truck.*`
+permissions and policies verbatim: `trucks` row policy remains
+`truck.read | truck.create | truck.update` (matrix above), exit remains the
+`egress` movement gated by kind → `truck.exit` (authorization map).
+**No policy edits or new codes**; display states are derived read-side and
+carry no RLS meaning.
+
 ## Isolation guarantees
 
 1. Cross-org: `has_permission` binds to the caller's own `organization_id`;

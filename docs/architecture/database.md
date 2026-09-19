@@ -432,6 +432,13 @@ create table public.trucks (
 );
 create index trucks_company_idx on public.trucks (transport_company_id);
 
+-- NOTE (Fase 7, ADR 0008): `trucks.status` is the fleet **base** status
+-- (5 codes) only. Entry/exit are `arrival`/`egress` movements on the
+-- append-only spine (§4.7) with `audit_log` rows — NEVER stored as
+-- timestamp/status columns on this table. The 13 display states rendered by
+-- the UI are derived read-side (docs/domain/states.md §truck_status display
+-- map). No DDL change for the trucks module.
+
 create table public.parties (               -- shipper/client catalog
   id              uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id),

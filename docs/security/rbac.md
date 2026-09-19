@@ -66,6 +66,14 @@ Notes:
   hold's create permission and `has_role('supervisor')` in the function).
 - `truck.exit` is the egress control point: `admin`/`supervisor` only.
 
+## Fase 7 trucks module — no RBAC change (ASSERTED)
+
+The CAMIONES module (Fase 7, ADR 0008) uses the existing `truck.*`
+permissions from the catalog above: `truck.read` (list/details),
+`truck.create` (create dialog), `truck.update` (edit dialog),
+`truck.exit` (egress action). **No new permission codes** — the 13 display
+states are a UX projection, not an authorization axis.
+
 ## 4. Seeds
 
 ```sql
