@@ -69,6 +69,10 @@ Detailed operational rules (Fase 2). Enforced in the data layer
   `previous_movement_id` (AC-E8-3).
 - Sensitive actions (quarantine, seizure, release, role change) always write
   to `audit_log` with actor and reason (AC-E9-2).
+- **Visual ≠ logistic (Fase 14, ADR 0015):** editing/restoring/publishing a
+  layout never emits a movement; layout operations are administrative
+  `audit_log` rows (`layout.create/publish/restore/edit`). Capacity
+  changes DO require validation + audit (`capacity.set`).
 
 ## 9. Access and data quality
 

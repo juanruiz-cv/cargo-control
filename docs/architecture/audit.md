@@ -45,6 +45,11 @@ catalog standardizes the naming so filters and reports are stable.
 | `layout.edit` | modificar layout | layouts/layout_elements editors |
 | `permission.change` | modificar permisos | roles/permissions admin flows |
 
+Fase 14 extension (ADR 0015): `layout.create`, `layout.publish`,
+`layout.restore` — layout version operations are administrative audit
+rows; they never write `movements` (visual ≠ logistic doctrine).
+Capacity changes keep `capacity.set` and their validation guard.
+
 Convention: `user.invite`, `role.change`, `attachment.add` remain valid
 extension codes. `action` is free text enforced by convention now; a
 future CHECK over the catalog can be added without breaking the spine.

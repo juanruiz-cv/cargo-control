@@ -283,6 +283,10 @@ create table public.layouts (
   version         int  not null default 1,
   status          text not null default 'draft'
                   check (status in ('draft','published','archived')),
+  created_by      uuid references public.users(id),  -- Fase 14, ADR 0015 (createdBy)
+  description     text,                              -- Fase 14, ADR 0015
+  changes         jsonb,                             -- Fase 14, ADR 0015: per-version
+                                                     -- change summary (element diffs)
   scale           numeric not null default 20 check (scale > 0), -- px per meter
   background      jsonb,                   -- canvas meta (color/image/grid)
   created_at      timestamptz not null default now(),
@@ -850,10 +854,26 @@ The 16 critical actions are a documented `entity.verb` catalog
 (`docs/architecture/audit.md`); `action` stays free text enforced by
 convention. No other DDL change, no renames.
 
+Schema **v10** (Fase 14 layout versioning, ADR 0015): add three nullable
+metadata columns to `layouts` — `created_by uuid references users(id)`,
+`description text`, `changes jsonb` (per-version change summary).
+A `layouts` row already IS a version (`version` + `unique (facility_id,
+name, version)`, ADR 0005); no separate version table. Restore creates
+a new draft version (version+1) copying elements — history rows are
+never mutated. Visual layout operations never write `movements`
+(movement spine is logistics-only); capacity edits keep their existing
+guard + `capacity.set` audit (ADR 0006). No other DDL change, no
+renames.
+
 ## 8. Design rules (enforced in the data layer)
 
 - `movements`, `movement_items`, `audit_log` are **append-only**: corrections are
   new rows chained through `previous_movement_id`/`previous_event_id` semantics.
+- **Visual ≠ logistic (Fase 14, ADR 0015):** editing/restoring/publishing a
+  layout never writes `movements`; layout operations are administrative
+  `audit_log` rows only (`layout.create/publish/restore/edit`). Capacity
+  edits remain the ONLY layout-adjacent change that requires validation +
+  audit (`capacity.set`, ADR 0006).
 - **Quantity balance (ADR 0003):** after every split/transfer, Σ leaf lot
   quantities per item = `total_quantity`; rejected by a trigger on violation.
   Holds freeze lots: no normal stock movement while `in_quarantine`/`seized`.

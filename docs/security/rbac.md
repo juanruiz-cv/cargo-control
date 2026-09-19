@@ -132,6 +132,14 @@ operators/viewers never see or touch the audit UI. The action catalog
 is data naming (entity.verb codes), not permission codes. **No new
 permission codes.**
 
+## Fase 14 layout versioning — no RBAC change (ASSERTED)
+
+The floor plan versioning (Fase 14, ADR 0015) reuses `warehouse.read`
+for viewing/compare and `warehouse.configure` (admin + supervisor) for
+create/publish/restore/edit. Version metadata columns are data, not
+permission codes; `layout.create/publish/restore` are audit action
+names, not RBAC codes. **No new permission codes.**
+
 ## 4. Seeds
 
 ```sql

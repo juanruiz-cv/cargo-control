@@ -157,6 +157,17 @@ reads require `audit.read` (admin + auditor). The only delta is the
 authorization axis. The UI exposes no delete/edit/clear affordance.
 **No policy edits or new codes.**
 
+## Fase 14 layout versioning — no policy change (ASSERTED)
+
+The floor plan versioning (Fase 14, ADR 0015) reuses existing
+`warehouse.read` (view/compare) and `warehouse.configure`
+(create/publish/restore/edit). The v10 additions
+(`layouts.created_by`, `description`, `changes jsonb`) are data, not
+authorization axes; `layouts` row policies are unchanged. Visual layout
+operations never write `movements` (already policy-protected); capacity
+edits keep their existing guard + `capacity.set` audit trigger. **No
+policy edits or new codes.**
+
 ## Isolation guarantees
 
 1. Cross-org: `has_permission` binds to the caller's own `organization_id`;

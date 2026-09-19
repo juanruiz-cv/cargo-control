@@ -50,8 +50,11 @@ or transferred. State lives at lot level; a manifest's status is a rollup.
    - **Has no visual fields.** Floor plan editor element types map to these
      physical types (ADR 0005). Cardinality: N : (0..1) `parent_id` (self).
 - **layout** — a named, versioned map: `id`, `facility_id`, `name`, `version`,
-  `status (draft|published|archived)`, `scale` (px per meter, default 20),
-  `background jsonb`.
+  `status (draft|published|archived)`, `created_by`, `description`,
+  `changes jsonb` (Fase 14, ADR 0015), `scale` (px per meter, default 20),
+  `background jsonb`. A row IS a version (`unique (facility_id, name,
+  version)`); restore copies elements into a new draft, never mutates
+  history; visual ops never write `movements`.
   - 1─N `layout_elements`; 1─N per facility. `scale` is the only bridge between
     physical (m) and visual (px).
 - **layout_element** — presentation record (editor element, ADR 0005):
