@@ -54,9 +54,10 @@ audit trails.
 - [docs/ux](./docs/ux) — design system, routes and components
 - [docs/security](./docs/security) — threat model and RLS matrix
 - [docs/qa](./docs/qa) — QA and testing strategy
+- [docs/brand](./docs/brand) — brand system and design tokens (Fase 1)
 - [docs/adr](./docs/adr) — Architecture Decision Records
 
-## Getting started (once Fase 1 begins)
+## Getting started (once the web app phase begins)
 
 1. Clone `cargo-control-web` (Lovable) into this workspace as a sibling.
 2. Create the Supabase project and apply the schema in `docs/architecture/database.md`.

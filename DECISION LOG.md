@@ -6,13 +6,14 @@ change to the project must be recorded here and/or as an ADR file under
 
 ## Index
 
-| # | Decision                                     | Status | Date       |
-| - | -------------------------------------------- | ------ | ---------- |
+| # | Decision                                     | Status     | Date       |
+| - | -------------------------------------------- | ---------- | ---------- |
 | 1 | Bootstrap on Supabase, no separate NestJS backend for MVP | Accepted | 2026-09-19 |
 | 2 | Four-repo layout (`web`, `docs`, `infrastructure`, `contracts` later) | Accepted | 2026-09-19 |
 | 3 | RLS default-deny with per-role policies | Accepted | 2026-09-19 |
 | 4 | Immutable, append-only checkpoint event log | Accepted | 2026-09-19 |
 | 5 | English for all technical artifacts and code | Accepted | 2026-09-19 |
+| 6 | Brand system: token-based design system, Inter, Lucide, status semantics | Accepted | 2026-09-19 |
 
 ## Record 1 — Bootstrap on Supabase (no NestJS)
 
@@ -61,3 +62,18 @@ and partitioning.
 are written in English. Conversation with the user stays in the user's language.
 
 **Consequences:** consistent, contribution-friendly output.
+
+## Record 6 — Brand system (token-based)
+
+**Context:** Fase 1 requires a defined visual identity before UI implementation.
+
+**Decision:** Establish the design system: palette Primary `#1F4E5F`,
+surface/bg neutrals, physical-zone mapping (warehouse `#F5F0D6`, warehouse area
+`#E1BA84`, playón `#D5D7D8`), status colors
+(success/info/warning/danger/blocked), Inter typography, Lucide icons, and a
+full token architecture (`--cc-*`). Components are specified in
+`docs/brand/components.md`; implementation targets `cargo-control-web`.
+
+**Consequences:** zero arbitrary colors; any palette change requires updating
+`colors.md` + `design-tokens.md` and a decision log entry. See
+`docs/adr/0002-brand-system.md`.
