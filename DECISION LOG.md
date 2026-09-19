@@ -532,3 +532,19 @@ doctrine contradicts it. See
 section.
 
 ## Record 20 — layout versioning (ADR 0015)
+
+## Record 22 — Complete documentation (ADR 0020)
+
+The documentation doctrine (ADR 0020): the repository is the
+system; the README is its single index (DOC-1). Each topic has one
+home (docs/architecture/documentation.md decides the home map DOC-2).
+The README index and the home map are asserted (DOC-AS-3 in
+`docs/qa/documentation-tests.md` — a name in the index with no home on
+disk fails, a home with no index entry fails). No RLS/RBAC/schema/policy
+change (asserted DOC-AS-2) — documentation indexes what already ships;
+never restates a second home for RLS/RBAC (DOC-4, one deciding home:
+docs/security). Also closes the cadence gap found on disk: README status
+and DECISION LOG had stalled at Fase 14 / Record 21 while Fases 15-20
+(spect + UX + docs) shipped — DOC-AS-3 makes that a fail next time, not
+a chore. See docs/architecture/documentation.md,
+docs/qa/documentation-tests.md, docs/domain/README.md, ADR 0020.

@@ -6,7 +6,7 @@ Track every load from arrival to departure: trucks, cargo units, warehouse
 movements, scale and scanner checkpoints, quarantines, seizures, and complete
 audit trails.
 
-> **Status: Fase 14 — Editor visual avanzado (layout versioning): spec + UX + QA.** This repository currently contains
+> **Status: Fase 21 — Complete documentation: README index + product + domain + architecture + brand + ux + security + qa homes + ADR 0020 + QC documentation tests. This repository currently contains** This repository currently contains
 > architecture and domain documentation only. No business features are
 > implemented yet by design. No fictional data is seeded that could be confused
 > with production data.
