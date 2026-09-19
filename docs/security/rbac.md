@@ -115,6 +115,15 @@ The `maintenance` flag is data, not an authorization axis (maintenance
 entry is an admin-write flow on `locations`). **No new permission
 codes.**
 
+## Fase 12 operational dashboard — no RBAC change (ASSERTED)
+
+The DASHBOARD (Fase 12, ADR 0013) reuses the existing catalog for every
+card: `warehouse.read` (facilities/locations/layouts), `truck.read` +
+`cargo.read` (camiones/mercadería), `scanner.read`/`scale.read`
+(queues), `quarantine.read`/`seizure.read` (holds). Cards hidden when
+the caller lacks the module's read code; chart series come from the
+same read-permissioned views. **No new permission codes.**
+
 ## 4. Seeds
 
 ```sql

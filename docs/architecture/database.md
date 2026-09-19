@@ -815,6 +815,30 @@ component of the five visual states (MANTENIMIENTO); LIBRE/PARCIAL/
 OCUPADO/BLOQUEADO are derived read-side. No other DDL change, no
 renames.
 
+Schema **v8** (Fase 12 operational dashboard, ADR 0013): **no new
+columns.** Documented read-only aggregated views for the dashboard
+(server-side aggregation; the client only receives aggregated rows —
+never raw history to compute statistics):
+- `dashboard_metrics` — the 10 KPI values as one aggregated row per
+  organization (yard/waiting/discharging trucks; stored/scan/scale/
+  quarantine/seized merchandise; occupied/free sectors) derived from
+  the Fase 7 display map signals, `item_lots`, `station_queue`,
+  `hold_open` and `location_occupancy`.
+- `dashboard_series_arrivals` — `count(*)` of `movements
+  kind='arrival'` bucketed per day (facility timezone).
+- `dashboard_series_movements` — `count(*)` of movements bucketed per
+  day and kind.
+- `dashboard_series_trucks_processed` — distinct trucks per day whose
+  latest movement is `egress`.
+- `dashboard_series_merchandise_processed` — `sum(movement_items.quantity)`
+  per day joined through `movements`.
+- `dashboard_occupancy_snapshot` — occupancy pct rows from
+  `location_occupancy` for chart/card rendering.
+Series views cap the window at the requested horizon (default 30 days;
+longer horizons via explicit pagination) and rely on existing indices
+(`movements_org_time_idx`, `item_lots_*_idx`). No DDL change on user
+tables, no renames.
+
 ## 8. Design rules (enforced in the data layer)
 
 - `movements`, `movement_items`, `audit_log` are **append-only**: corrections are

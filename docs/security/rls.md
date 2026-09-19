@@ -135,6 +135,18 @@ permissions they belong to (`truck.read`, `cargo.read`, `scanner.read`,
 derived read-side and carry no RLS meaning. **No policy edits or new
 codes.**
 
+## Fase 12 operational dashboard — no policy change (ASSERTED)
+
+The DASHBOARD (Fase 12, ADR 0013) is a read-only aggregation layer:
+derived dashboard views (schema v8) expose aggregated rows only and are
+filtered through existing row policies — the client never receives raw
+movement history for statistics. Dashboard read reuses the module read
+codes (`warehouse.read`, `truck.read`, `cargo.read`, `scanner.read`,
+`scale.read`, `quarantine.read`, `seizure.read`); a card the user cannot
+read is hidden, never served as a partial mix. Append-only doctrine
+unchanged (movements/movement_items still have no UPDATE/DELETE
+grants). **No policy edits or new codes.**
+
 ## Isolation guarantees
 
 1. Cross-org: `has_permission` binds to the caller's own `organization_id`;

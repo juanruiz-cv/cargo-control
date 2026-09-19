@@ -39,6 +39,11 @@ stored. Precedence (first match wins), reading only: base `trucks.status`,
 Entry/exit for display: ingreso = first `arrival` movement timestamp; egreso
 = last `egress` movement timestamp (both derived, ADR 0008 §3).
 
+Dashboard KPIs (Fase 12, ADR 0013) derive from this same display map:
+"camiones dentro del predio" = arrived-without-egress codes; "esperando" =
+`WAITING`; "descargas en proceso" = `IN_PROCESS`/`PARTIALLY_UNLOADED`.
+No new stored or display state is introduced for the dashboard.
+
 ## driver_status
 `active | disabled`
 
