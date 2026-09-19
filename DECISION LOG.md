@@ -381,3 +381,37 @@ updates without full redraw, permissions and org isolation). Only one
 new column. See `docs/adr/0012-operational-map.md`,
 `docs/architecture/operational-map.md`, `docs/ux/operational-map.md`,
 `docs/qa/operational-map-tests.md`.
+## Record 18 — Dashboard operativo (ADR 0013)
+
+**Context:** Fase 12 (Prompt 13) requires the operational dashboard:
+camiones dentro del predio / esperando / descargas en proceso; mercadería
+almacenada / en Scanner / en Balanza / en Rezago / secuestrada; sectores
+ocupados / libres; charts of ingresos por día, movimientos, ocupación,
+camiones procesados y mercadería procesada. No fake data in production;
+every metric must derive from the real database; queries must be
+optimized — never pull the whole history to the frontend to compute
+statistics.
+
+**Decision:** the dashboard is a **read-only server-side aggregation
+layer** over the existing model — zero new columns. Every KPI maps to
+real tables/views already specified (truck display map ADR 0008,
+`item_lots`, `station_queue`, `hold_open`, `location_occupancy`); charts
+are time-series aggregates computed in PostgreSQL (GROUP BY) and the
+frontend receives **only aggregated rows**, never raw movements. Schema
+**v8** documents derived read-only views (`dashboard_metrics`,
+`dashboard_series_arrivals/movements/trucks_processed/
+merchandise_processed`, `dashboard_occupancy_snapshot`) capped at the
+requested horizon (default 30d) and powered by existing indices
+(`movements_org_time_idx`). No fake data: empty orgs render 0/empty
+states; demo data (if any) lives in an isolated non-production channel.
+Permissions reuse the catalog — cards hidden when the module read code
+is missing, never a partial mix; RLS/RBAC unchanged (asserted).
+
+**Consequences:** the dashboard ships as spec + UX + QA (DB-* cases, 40
+scenarios covering KPI correctness, series day-boundaries/timezone,
+server-side aggregation with no raw-history route, no-fake-data negative
+tests, permissions and org isolation). No new columns, no migrations
+beyond views. See `docs/adr/0013-operational-dashboard.md`,
+`docs/architecture/operational-dashboard.md`,
+`docs/ux/operational-dashboard.md`,
+`docs/qa/operational-dashboard-tests.md`.
