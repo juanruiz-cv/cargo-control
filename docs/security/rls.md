@@ -90,6 +90,16 @@ permissions and policies verbatim: `trucks` row policy remains
 **No policy edits or new codes**; display states are derived read-side and
 carry no RLS meaning.
 
+## Fase 8 cargo module — no policy change (ASSERTED)
+
+The CARGAMENTOS module (Fase 8, ADR 0009) reuses the existing `cargo.*`
+permissions and policies verbatim: `cargo_manifests`/`cargo_items`/
+`item_lots` keep their matrix rows (`cargo.read | cargo.create |
+cargo.update`, item_lots `cargo.read` + placement writes via movements);
+split → `cargo.update`, transfer → `cargo.transfer` (authorization map).
+**No policy edits or new codes**; `currentLocation` is a read-side rollup
+of `item_lots` and carries no RLS meaning.
+
 ## Isolation guarantees
 
 1. Cross-org: `has_permission` binds to the caller's own `organization_id`;

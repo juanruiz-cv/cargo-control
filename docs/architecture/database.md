@@ -492,8 +492,9 @@ create table public.cargo_items (
   organization_id uuid not null references public.organizations(id),
   manifest_id    uuid not null references public.cargo_manifests(id),
   line_number    int not null,
-  sku            text,
+  sku            text,             -- identifier (ADR 0009 §5)
   description    text not null,
+  category       text,             -- Fase 8 (ADR 0009 §2): display/grouping label
   total_quantity numeric not null check (total_quantity > 0),
   uom            text not null default 'unit',
   unit_weight_kg numeric,
@@ -501,6 +502,7 @@ create table public.cargo_items (
   status         text not null default 'pending'
                  check (status in ('pending','on_truck','discharged',
                                    'distributed','closed')),
+  observations   text,             -- Fase 8 (ADR 0009 §3): item-level notes
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now(),
   unique (manifest_id, line_number)
@@ -769,6 +771,11 @@ Schema **v3** (Fase 5 capacity & occupancy, ADR 0006): add
 `unit_weight_kg`); new `location_occupancy` view (used/available/% per
 dimension + missing-data flags); capacity guard + audit triggers on
 `locations` and `item_lots`. No renames.
+
+Schema **v4** (Fase 8 cargo module, ADR 0009): add nullable `category` and
+`observations` to `cargo_items` (display grouping + item-level notes).
+`currentLocation` is **derived** from `item_lots` placement — never a
+column. No other DDL change, no renames.
 
 ## 8. Design rules (enforced in the data layer)
 

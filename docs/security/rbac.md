@@ -74,6 +74,14 @@ permissions from the catalog above: `truck.read` (list/details),
 `truck.exit` (egress action). **No new permission codes** — the 13 display
 states are a UX projection, not an authorization axis.
 
+## Fase 8 cargo module — no RBAC change (ASSERTED)
+
+The CARGAMENTOS module (Fase 8, ADR 0009) uses the existing `cargo.*`
+permissions: `cargo.read` (list/details/timeline), `cargo.create` (new
+manifest/item), `cargo.update` (edit + split), `cargo.transfer`
+(transfer). **No new permission codes** — `category` is a display label,
+not an authorization axis.
+
 ## 4. Seeds
 
 ```sql
