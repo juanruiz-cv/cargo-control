@@ -147,6 +147,16 @@ read is hidden, never served as a partial mix. Append-only doctrine
 unchanged (movements/movement_items still have no UPDATE/DELETE
 grants). **No policy edits or new codes.**
 
+## Fase 13 audit system — no policy change (ASSERTED)
+
+The AUDITORÍA screen (Fase 13, ADR 0014) is read-only over the existing
+`audit_log` spine: client writes are impossible (no INSERT/UPDATE/DELETE
+grants; trigger/engine-only registration per the existing matrix), and
+reads require `audit.read` (admin + auditor). The only delta is the
+`audit_log.metadata jsonb` data column (schema v9) — data, not an
+authorization axis. The UI exposes no delete/edit/clear affordance.
+**No policy edits or new codes.**
+
 ## Isolation guarantees
 
 1. Cross-org: `has_permission` binds to the caller's own `organization_id`;

@@ -700,6 +700,8 @@ create table public.audit_log (
   before          jsonb,
   after           jsonb,
   reason          text,
+  metadata        jsonb,                   -- Fase 13, ADR 0014: structured context
+                                           -- (operation_key, source, session_id)
   created_at      timestamptz not null default now()
   -- APPEND-ONLY, same policy as movements.
 );
@@ -838,6 +840,15 @@ Series views cap the window at the requested horizon (default 30 days;
 longer horizons via explicit pagination) and rely on existing indices
 (`movements_org_time_idx`, `item_lots_*_idx`). No DDL change on user
 tables, no renames.
+
+Schema **v9** (Fase 13 audit system, ADR 0014): add
+`audit_log.metadata jsonb` (nullable) — structured context
+(operation_key, source, session_id) alongside the existing `reason`
+free text, completing the prompt's AuditLog shape (id, userId, action,
+entity, entityId, timestamp, previousData, newData, metadata).
+The 16 critical actions are a documented `entity.verb` catalog
+(`docs/architecture/audit.md`); `action` stays free text enforced by
+convention. No other DDL change, no renames.
 
 ## 8. Design rules (enforced in the data layer)
 

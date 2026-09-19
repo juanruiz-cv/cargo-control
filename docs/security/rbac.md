@@ -124,6 +124,14 @@ card: `warehouse.read` (facilities/locations/layouts), `truck.read` +
 the caller lacks the module's read code; chart series come from the
 same read-permissioned views. **No new permission codes.**
 
+## Fase 13 audit system — no RBAC change (ASSERTED)
+
+The AUDITORÍA screen (Fase 13, ADR 0014) uses the existing
+`audit.read` (admin + auditor) with read-only rendering; normal
+operators/viewers never see or touch the audit UI. The action catalog
+is data naming (entity.verb codes), not permission codes. **No new
+permission codes.**
+
 ## 4. Seeds
 
 ```sql

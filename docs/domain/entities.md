@@ -180,8 +180,10 @@ or transferred. State lives at lot level; a manifest's status is a rollup.
   `entity_type`, `entity_id` (polymorphic ref, see §4.5 in `database.md`),
   `storage_path`, `mime`, `size`, `uploaded_by`, `created_at`.
 - **audit_log** — admin/sensitive actions: `id` (bigint identity),
-  `organization_id`, `actor_id`, `action`, `entity_type`, `entity_id`,
-  `before jsonb`, `after jsonb`, `reason`, `created_at`. Append-only.
+  `organization_id`, `actor_id`, `action` (catalog `entity.verb`,
+  ADR 0014), `entity_type`, `entity_id`, `before jsonb`, `after jsonb`,
+  `reason`, `metadata jsonb` (Fase 13, ADR 0014), `created_at`.
+  Append-only; reads via `audit.read` (admin/auditor); no delete.
 
 ## Cardinality highlights
 
