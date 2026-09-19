@@ -210,6 +210,65 @@ create index locations_parent_idx   on public.locations (parent_id);
 -- item_lots (Σ quantities per current_location_id), guaranteed consistent by
 -- the ADR 0003 balance trigger. Storing counters here would risk drift.
 
+-- Occupancy (Fase 5, ADR 0006): derived per dimension over lots at rest here.
+-- Full DDL outline: docs/domain/capacity-occupancy.md §6–§7.
+create view public.location_occupancy as
+  select l.id as location_id, l.organization_id, l.facility_id, l.code,
+    coalesce(w.kg, 0)    as occupancy_kg,
+    coalesce(v.m3, 0)    as occupancy_m3,
+    coalesce(u.units, 0) as occupancy_units,
+    coalesce(w.missing_weight, 0) as missing_weight_lots,
+    coalesce(v.missing_volume, 0) as missing_volume_lots,
+    l.capacity_max_kg, l.capacity_max_volume_m3, l.capacity_max_units,
+    l.capacity_max_kg        - coalesce(w.kg, 0) as available_kg,
+    l.capacity_max_volume_m3 - coalesce(v.m3, 0) as available_m3,
+    l.capacity_max_units     - coalesce(u.units,0) as available_units,
+    case when l.capacity_max_kg is not null
+      then round(coalesce(w.kg,0) / l.capacity_max_kg * 100, 1) end as pct_kg,
+    case when l.capacity_max_volume_m3 is not null
+      then round(coalesce(v.m3,0) / l.capacity_max_volume_m3 * 100, 1) end as pct_m3,
+    case when l.capacity_max_units is not null
+      then round(coalesce(u.units,0) / l.capacity_max_units * 100, 1) end as pct_units
+  from public.locations l
+  left join (select current_location_id,
+                    sum(quantity * coalesce(l.unit_weight_kg, i.unit_weight_kg)) as kg,
+                    count(*) filter (where l.unit_weight_kg is null
+                                      and i.unit_weight_kg is null) as missing_weight
+             from   public.item_lots l
+             join   public.cargo_items i on i.id = l.cargo_item_id
+             where  l.current_location_id is not null
+             group  by l.current_location_id) w on w.current_location_id = l.id
+  left join (select current_location_id,
+                    sum(quantity * coalesce(l.unit_volume_m3, i.unit_volume_m3)) as m3,
+                    count(*) filter (where l.unit_volume_m3 is null
+                                      and i.unit_volume_m3 is null) as missing_volume
+             from   public.item_lots l
+             join   public.cargo_items i on i.id = l.cargo_item_id
+             where  l.current_location_id is not null
+             group  by l.current_location_id) v on v.current_location_id = l.id
+  left join (select current_location_id, sum(quantity) as units
+             from   public.item_lots
+             where  current_location_id is not null and uom = 'unit'
+             group  by current_location_id) u on u.current_location_id = l.id;
+
+-- Capacity guard triggers (Fase 5, ADR 0006): placement guard serializes per
+-- location (row lock FOR UPDATE) and rejects overflow; capacity guard rejects
+-- reductions below occupancy; audit trigger logs every accepted capacity.set.
+-- Rejected operations write nothing and are not audited (attempt ≠ change).
+create trigger locations_capacity_guard_trg
+  before update of capacity_max_kg, capacity_max_volume_m3, capacity_max_units
+  on public.locations
+  for each row execute function public.locations_capacity_guard();
+create trigger lot_placement_capacity_guard_trg
+  before insert or update of current_location_id, quantity,
+                          unit_weight_kg, unit_volume_m3, uom
+  on public.item_lots
+  for each row execute function public.lot_placement_capacity_guard();
+create trigger locations_capacity_audit_trg
+  after update of capacity_max_kg, capacity_max_volume_m3, capacity_max_units
+  on public.locations
+  for each row execute function public.locations_capacity_audit();
+
 -- =====================================================================
 -- 4.3 Visual layouts (presentation only — ADR 0004)
 -- =====================================================================
@@ -423,6 +482,7 @@ create table public.cargo_items (
   total_quantity numeric not null check (total_quantity > 0),
   uom            text not null default 'unit',
   unit_weight_kg numeric,
+  unit_volume_m3 numeric check (unit_volume_m3 is null or unit_volume_m3 > 0), -- Fase 5 (ADR 0006)
   status         text not null default 'pending'
                  check (status in ('pending','on_truck','discharged',
                                    'distributed','closed')),
@@ -447,6 +507,7 @@ create table public.item_lots (            -- quantum of traceability (ADR 0003)
   current_location_id     uuid references public.locations(id),
   current_truck_id        uuid references public.trucks(id),
   unit_weight_kg          numeric,          -- optional override
+  unit_volume_m3          numeric check (unit_volume_m3 is null or unit_volume_m3 > 0), -- Fase 5 (ADR 0006)
   created_via_movement_id uuid,             -- FK added after movements exists
   created_at              timestamptz not null default now(),
   updated_at              timestamptz not null default now(),
@@ -688,6 +749,12 @@ door/other may be visual-only). `locations` gain `physical_*` dimensions,
 `physical_unit` and `capacity_max_units/kg/volume_m3` (was `capacity_qty`,
 `capacity_kg`). `layouts` gain `scale` (px per meter).
 
+Schema **v3** (Fase 5 capacity & occupancy, ADR 0006): add
+`unit_volume_m3` to `cargo_items`/`item_lots` (volume source, mirroring
+`unit_weight_kg`); new `location_occupancy` view (used/available/% per
+dimension + missing-data flags); capacity guard + audit triggers on
+`locations` and `item_lots`. No renames.
+
 ## 8. Design rules (enforced in the data layer)
 
 - `movements`, `movement_items`, `audit_log` are **append-only**: corrections are
@@ -704,6 +771,13 @@ door/other may be visual-only). `locations` gain `physical_*` dimensions,
 - **Physical ≠ visual (ADR 0005):** physical dimensions (meters) and visual
   dimensions (pixels) never auto-sync; the only bridge is `layouts.scale`
   (px/m), used read-side for conversions.
+- **Capacity & occupancy (ADR 0006):** occupancy is derived per dimension
+  (kg = Σ qty × unit_weight; m³ = Σ qty × unit_volume; units = Σ qty with
+  `uom='unit'`) over lots at rest at the location, **including holds**;
+  `NULL` capacity = unlimited; placement that would exceed a known capacity,
+  or a capacity reduction below current occupancy, is rejected by trigger;
+  every accepted capacity change writes an `audit_log` `capacity.set` row.
+  Lots without weight/volume data are flagged, not summed as zero.
 - RLS default-deny on every table; append-only tables expose no UPDATE/DELETE;
   attachments readable through signed Storage URLs only.
   See `docs/domain/business-rules.md` and `docs/security/rls.md`.
