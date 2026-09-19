@@ -6,7 +6,7 @@ Track every load from arrival to departure: trucks, cargo units, warehouse
 movements, scale and scanner checkpoints, quarantines, seizures, and complete
 audit trails.
 
-> **Status: Fase 6 — Security: identity, Auth, RBAC & RLS.** This repository currently contains
+> **Status: Fase 7 — Trucks (CAMIONES) module: spec + QA.** This repository currently contains
 > architecture and domain documentation only. No business features are
 > implemented yet by design. No fictional data is seeded that could be confused
 > with production data.
@@ -51,9 +51,9 @@ audit trails.
 - [docs/product](./docs/product) — product and modules
 - [docs/architecture](./docs/architecture) — full architecture details (DB, deps, risks)
 - [docs/domain](./docs/domain) — domain model and entities
-- [docs/ux](./docs/ux) — design system, routes and components
+- [docs/ux](./docs/ux) — design system, routes and components (incl. trucks module, Fase 7)
 - [docs/security](./docs/security) — threat model and RLS matrix
-- [docs/qa](./docs/qa) — QA and testing strategy
+- [docs/qa](./docs/qa) — QA and testing strategy (incl. trucks module tests, Fase 7)
 - [docs/brand](./docs/brand) — brand system and design tokens (Fase 1)
 - [docs/adr](./docs/adr) — Architecture Decision Records
 

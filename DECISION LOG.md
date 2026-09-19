@@ -193,3 +193,61 @@ is fully effective only where weight/volume data exists, motivating capture of
 `missing_*` lots. Small v3 delta (2 columns + view + 3 triggers), no renames.
 See `docs/adr/0006-capacity-occupancy-invariants.md`,
 `docs/domain/capacity-occupancy.md`, `docs/qa/capacity-occupancy-tests.md`.
+
+## Record 12 — Identity & access (ADR 0007)
+
+**Context:** Fase 6 requires authentication (login, logout, session
+persistence, password recovery, expiration, protected routes) backed by
+Supabase Auth, plus an RBAC with seven roles against an explicit permission
+catalog. Permission decisions must never rely on the React client alone.
+
+**Decision:** Supabase Auth owns identity (`auth.users` is the identity
+store; `public.users` profile created 1:1 by `on_auth_user_created`
+trigger). RLS is **permission-driven** via two helpers — `has_permission(_code)`
+(business tables, org-scoped by construction) and `has_role(_role)`
+(tenant tables) — so grants change as **data** in `role_permissions`, never
+by editing policies. Roles: `admin | supervisor | operator | scanner_operator
+| scale_operator | auditor | viewer` (`guard` splits into
+scanner/scale operators; `viewer` is new). Permission catalog: 20 codes
+(`truck.*`, `cargo.*`, `warehouse.*`, `scanner.*`, `scale.*`,
+`quarantine.*`, `seizure.*`, `audit.read`). Movement spine is INSERT-only
+with a kind → permission map; `audit_log` SELECT for `audit.read`, INSERT
+trigger-only. Edge Functions decode the JWT, set the `app.actor_id` GUC and
+re-check permissions server-side — defense in depth (function first, RLS
+last; client route guards are UX only).
+
+**Consequences:** grant changes are data migrations; policy count stays
+small; the old five-role matrix is replaced; cross-org isolation is
+structural via `has_permission`. Cost: each RLS check runs a small
+users → roles → permissions join chain, acceptable at MVP scale. See
+`docs/adr/0007-identity-access-supabase-auth.md`,
+`docs/security/authentication.md`, `docs/security/rbac.md`,
+`docs/security/authorization.md`, `docs/security/rls.md`,
+`docs/qa/security-tests.md`.
+
+## Record 13 — CAMIONES trucks module (ADR 0008)
+
+**Context:** Fase 7 requires the truck module UI (`TruckList`, `TruckCard`,
+`TruckDetails`, create/edit dialogs, `TruckStatusBadge`, `TruckTimeline`)
+with search, filters, sorting, pagination, and auditable truck entry/exit.
+The prompt lists 13 truck states, but the repo authority (Fase 3/5/6) models
+`trucks.status` as a 5-code **fleet base status** and treats arrival/egress
+and all operations as rows on the append-only movement spine.
+
+**Decision:** keep `trucks.status` as the fleet base status (5 codes,
+unchanged CHECK). The 13 prompt states are **display-tier projections**
+computed read-side by `TruckStatusBadge` from base status × latest movement ×
+open operations (precedence map in `docs/domain/states.md`); none are
+persisted. Truck entry and exit are `arrival`/`egress` **movements** on the
+spine — auditable, never editable date/status columns (no `entry_at` /
+`exit_at`). `TruckList` lazy-loads (page 20, cursor on `plate`; count fetched
+only when the rendered page is full). Permissions reuse the Fase 6 catalog
+(`truck.read/create/update/exit`) — **no new codes, no policy edits**.
+
+**Consequences:** no schema migration for Fase 7; operational state is
+derived so the UI cannot lie and egress stays server-authorized; the 13
+display codes are a UI/QA contract, not a DB contract; list performance
+scales without full-table scans. See
+`docs/adr/0008-truck-module-derived-status.md`,
+`docs/ux/trucks-module.md`, `docs/domain/states.md` (§truck_status display
+map), `docs/qa/truck-module-tests.md`.
