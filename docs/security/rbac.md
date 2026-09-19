@@ -101,6 +101,20 @@ a server-side supervisor flow (no new codes). Derived queues and
 history are read projections of the same permissions. **No new
 permission codes.**
 
+## Fase 11 operational map — no RBAC change (ASSERTED)
+
+The MAPA OPERATIVO (Fase 11, ADR 0012) composes existing read
+permissions: map read = `warehouse.read` (facilities, locations,
+layouts); truck detail = `truck.read` (+`cargo.read` for merchandise);
+sector/galpón panels = `cargo.read` (+`warehouse.read`); special-area
+panels = `scanner.read`/`scale.read`/`quarantine.read`/`seizure.read`.
+Actions in panels use the same kind→permission map as the module routes
+(Fase 9) — e.g. egreso requires `truck.exit`, scan requires
+`scanner.create`, hold requires `quarantine.create`/`seizure.create`.
+The `maintenance` flag is data, not an authorization axis (maintenance
+entry is an admin-write flow on `locations`). **No new permission
+codes.**
+
 ## 4. Seeds
 
 ```sql

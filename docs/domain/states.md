@@ -73,6 +73,22 @@ A lot is at rest in exactly one physical place (never both, never a layout):
 `zone | bin | playon | checkpoint` (+ `checkpoint_kind`: `scan | scale | control`
 when `type = checkpoint`; `facilities` cover the former `site` type)
 
+## location visual state — mapa operativo (Fase 11, ADR 0012)
+Five visual states rendered on the operational map. Precedence (first
+match wins); all but one are derived read-side:
+
+| Estado | Rule |
+|---|---|
+| `MANTENIMIENTO` | stored — `locations.maintenance = true` (admin-set, not derivable) |
+| `BLOQUEADO` | derived — an open hold (rezago/secuestro) exists on a lot placed at this location (`hold_open`) |
+| `OCUPADO` | derived — occupancy ≥ capacity on any known dimension |
+| `PARCIAL` | derived — 0 < occupancy < capacity on at least one known dimension |
+| `LIBRE` | derived — otherwise (occupancy 0 across known dimensions) |
+
+Null capacity = unlimited → never forces OCUPADO (Fase 5 rule); missing
+weight/volume lots are flagged, not treated as zero (D7 missing-data
+rule) — state uses the known dimensions only.
+
 ## movement_kind (movements.kind)
 `arrival | discharge | split | transfer | scan_in | scan_out | scale |
  store | load_out | quarantine | seizure | release | egress | correction |

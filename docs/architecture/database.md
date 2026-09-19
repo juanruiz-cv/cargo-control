@@ -196,6 +196,8 @@ create table public.locations (
   requires_authorization boolean not null default false,
   notes                text,
   active               boolean not null default true,
+  maintenance          boolean not null default false,  -- Fase 11 (ADR 0012):
+                             -- MANTENIMIENTO visual state (admin-set)
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now(),
   unique (facility_id, code),
@@ -806,6 +808,12 @@ Append-only asserts (ADR 0011): `scanner_operations`,
 movements); `quarantine_operations`/`seizure_operations` cases are
 never deleted — resolution is a `release` movement (Fase 9 engine) plus a
 server-side status update only. No DDL change, no renames.
+
+Schema **v7** (Fase 11 operational map, ADR 0012): add
+`locations.maintenance boolean not null default false` — the only stored
+component of the five visual states (MANTENIMIENTO); LIBRE/PARCIAL/
+OCUPADO/BLOQUEADO are derived read-side. No other DDL change, no
+renames.
 
 ## 8. Design rules (enforced in the data layer)
 

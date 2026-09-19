@@ -35,16 +35,20 @@ or transferred. State lives at lot level; a manifest's status is a rollup.
 ### Physical vs visual (ADR 0004 + ADR 0005)
 
 - **location** — operational node: `id`, `organization_id`, `facility_id`,
-  `parent_id` (zone → bin tree), `type (zone|bin|playon|checkpoint)`,
-  `checkpoint_kind (scan|scale|control)` when type=checkpoint, `code` (unique
-  per facility), `name`, physical dimensions `physical_width/height/depth` +
-  `physical_unit (m|cm|ft)`, capacity `capacity_max_units`,
-  `capacity_max_kg`, `capacity_max_volume_m3`, `allows_hold`,
-  `requires_authorization`, `notes`, `active`.
-  - **Owns:** physical dimensions, capacity and operational rules.
-    **Derives:** occupancy and inventory from `item_lots` — never stored.
-  - **Has no visual fields.** Floor plan editor element types map to these
-    physical types (ADR 0005). Cardinality: N : (0..1) `parent_id` (self).
+   `parent_id` (zone → bin tree), `type (zone|bin|playon|checkpoint)`,
+   `checkpoint_kind (scan|scale|control)` when type=checkpoint, `code` (unique
+   per facility), `name`, physical dimensions `physical_width/height/depth` +
+   `physical_unit (m|cm|ft)`, capacity `capacity_max_units`,
+   `capacity_max_kg`, `capacity_max_volume_m3`, `allows_hold`,
+   `requires_authorization`, `notes`, `active`, `maintenance` (Fase 11,
+   ADR 0012 — stored component of the MANTENIMIENTO visual state).
+   - **Owns:** physical dimensions, capacity and operational rules.
+     **Derives:** occupancy and inventory from `item_lots` — never stored.
+   - **Visual state (mapa operativo, ADR 0012):** LIBRE/PARCIAL/OCUPADO/
+     BLOQUEADO derive read-side; only MANTENIMIENTO is stored
+     (`maintenance = true`).
+   - **Has no visual fields.** Floor plan editor element types map to these
+     physical types (ADR 0005). Cardinality: N : (0..1) `parent_id` (self).
 - **layout** — a named, versioned map: `id`, `facility_id`, `name`, `version`,
   `status (draft|published|archived)`, `scale` (px per meter, default 20),
   `background jsonb`.

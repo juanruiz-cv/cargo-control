@@ -123,6 +123,18 @@ remain append-only (no UPDATE/DELETE grants); `quarantine_operations`/
 Derived views (`station_queue`, `hold_open`) are read-only through
 existing policies. **No policy edits or new codes.**
 
+## Fase 11 operational map — no policy change (ASSERTED)
+
+The MAPA OPERATIVO (Fase 11, ADR 0012) is a read projection of the
+published layout plus occupancy/trucks/holds; it adds only the data
+flag `locations.maintenance` (schema v7), an operational field with no
+RLS meaning. Map read = existing `warehouse.read` on
+facilities/locations/layouts; detail panels reuse the module read
+permissions they belong to (`truck.read`, `cargo.read`, `scanner.read`,
+`scale.read`, `quarantine.read`, `seizure.read`). Visual states are
+derived read-side and carry no RLS meaning. **No policy edits or new
+codes.**
+
 ## Isolation guarantees
 
 1. Cross-org: `has_permission` binds to the caller's own `organization_id`;
