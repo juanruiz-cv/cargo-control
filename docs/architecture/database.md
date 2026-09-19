@@ -551,7 +551,8 @@ create table public.movements (
                   check (kind in ('arrival','discharge','split','transfer',
                                   'scan_in','scan_out','scale','store',
                                   'load_out','quarantine','seizure',
-                                  'release','egress','correction')),
+                                  'release','egress','correction',
+                                  'return_to_truck')),  -- Fase 9, ADR 0010
   manifest_id     uuid references public.cargo_manifests(id),
   operator_id     uuid references public.users(id),
   location_id     uuid references public.locations(id),
@@ -559,12 +560,19 @@ create table public.movements (
   created_at      timestamptz not null default now(),  -- insert time
   reason          text,               -- required for sensitive kinds
   previous_movement_id bigint references public.movements(id), -- corrections
+  operation_key   text,               -- Fase 9, ADR 0010: idempotency key (nullable)
   payload         jsonb
   -- APPEND-ONLY: no UPDATE/DELETE grants via RLS; corrections are new rows.
 );
 create index movements_org_time_idx on public.movements (organization_id, occurred_at desc);
 create index movements_manifest_idx  on public.movements (manifest_id);
 create index movements_prev_idx      on public.movements (previous_movement_id);
+-- Fase 9 idempotency: duplicate replay rejected (ADR 0010)
+create unique index movements_org_opkey_idx
+  on public.movements (organization_id, operation_key)
+  where operation_key is not null;
+-- Assert: movements_org_time_idx above covers the timeline read
+-- (organization_id, occurred_at desc) — no extra index needed.
 
 create table public.movement_items (     -- per-lot detail of a movement
   id               bigint generated always as identity primary key,
@@ -776,6 +784,15 @@ Schema **v4** (Fase 8 cargo module, ADR 0009): add nullable `category` and
 `observations` to `cargo_items` (display grouping + item-level notes).
 `currentLocation` is **derived** from `item_lots` placement — never a
 column. No other DDL change, no renames.
+
+Schema **v5** (Fase 9 movement engine, ADR 0010): add `return_to_truck`
+to the `movements.kind` CHECK (remnant placed back on a truck without
+egress); add nullable `movements.operation_key` with partial unique
+index `movements_org_opkey_idx (organization_id, operation_key) where
+operation_key is not null` (idempotency / duplicate replay rejection).
+Timeline read is covered by the existing `movements_org_time_idx`
+(organization_id, occurred_at desc) — asserted, no extra index. No
+other DDL change, no renames.
 
 ## 8. Design rules (enforced in the data layer)
 

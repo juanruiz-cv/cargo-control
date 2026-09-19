@@ -75,7 +75,18 @@ when `type = checkpoint`; `facilities` cover the former `site` type)
 
 ## movement_kind (movements.kind)
 `arrival | discharge | split | transfer | scan_in | scan_out | scale |
- store | load_out | quarantine | seizure | release | egress | correction`
+ store | load_out | quarantine | seizure | release | egress | correction |
+ return_to_truck` (added Fase 9, ADR 0010 — remnant placed back on a truck,
+manifest stays open; maps to `cargo.transfer`)
+
+### movement status (Fase 9, ADR 0010)
+
+A persisted movement is an **applied** fact — there is no `status`
+column, the spine is append-only. Rejected attempts never persist as
+movements; they are recorded in `audit_log` with outcome `failed` +
+reason + `operation_key`. `operation_key` (nullable) is unique per
+organization where present (idempotency; duplicate replay rejected,
+ADR 0010).
 
 ## facility_type
 `warehouse | site | plant`

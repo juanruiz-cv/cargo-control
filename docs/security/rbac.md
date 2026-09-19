@@ -82,6 +82,16 @@ manifest/item), `cargo.update` (edit + split), `cargo.transfer`
 (transfer). **No new permission codes** — `category` is a display label,
 not an authorization axis.
 
+## Fase 9 movement engine — no RBAC change (ASSERTED)
+
+The MOTOR DE MOVIMIENTOS (Fase 9, ADR 0010) reuses the kind → permission
+map verbatim: every new engine operation is gated by the existing code
+for its kind (split → `cargo.update`, transfer/return_to_truck →
+`cargo.transfer`, scan → `scanner.create`, weigh → `scale.create`, holds
+→ `quarantine.create`/`seizure.create`, egreso → `truck.exit`).
+**No new permission codes** — `operation_key` is engine data, not an
+authorization axis.
+
 ## 4. Seeds
 
 ```sql

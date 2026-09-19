@@ -100,6 +100,18 @@ split → `cargo.update`, transfer → `cargo.transfer` (authorization map).
 **No policy edits or new codes**; `currentLocation` is a read-side rollup
 of `item_lots` and carries no RLS meaning.
 
+## Fase 9 movement engine — no policy change (ASSERTED)
+
+The MOTOR DE MOVIMIENTOS (Fase 9, ADR 0010) formalizes a transactional
+protocol over the existing append-only spine; it introduces no new
+permission codes and no policy edits: `movements`/`movement_items` keep
+their existing RLS (insert via engine, read for `cargo.read`, strict
+append-only — no UPDATE/DELETE grants), and the new `return_to_truck`
+kind maps to the existing `cargo.transfer` permission. Timeline reads use
+existing row policies; movements are never directly writable by the
+client. `operation_key` is a data column, not an authorization axis.
+**No policy edits or new codes.**
+
 ## Isolation guarantees
 
 1. Cross-org: `has_permission` binds to the caller's own `organization_id`;

@@ -134,9 +134,16 @@ or transferred. State lives at lot level; a manifest's status is a rollup.
 - **movement** (was `checkpoint_event`) — append-only spine event:
   `id` (bigint identity), `organization_id`, `facility_id`, `kind`, `manifest_id`,
   `operator_id`, `location_id`, `occurred_at`, `created_at`, `reason`,
-  `previous_movement_id` (corrections), `payload`.
+  `previous_movement_id` (corrections), `payload`,
+  `operation_key` (Fase 9, ADR 0010: caller-generated idempotency key, nullable;
+  unique per organization where not null).
   - Kinds: `arrival | discharge | split | transfer | scan_in | scan_out | scale |
-    store | load_out | quarantine | seizure | release | egress | correction`.
+    store | load_out | quarantine | seizure | release | egress | correction |
+    return_to_truck` (Fase 9; CHECK constant added — remnant placed back on a
+    truck without egress, `cargo.transfer`).
+  - **Status (Fase 9):** a persisted movement IS an applied fact
+    (`status = applied`); rejected attempts never persist as movements and are
+    recorded in `audit_log` (outcome `failed` + reason + `operation_key`).
   - 1─N `movement_items`; 1─N specialized operations (below).
 - **movement_item** — per-lot detail of a movement: `id`, `movement_id`,
   `item_lot_id`, `quantity` (>0), `from_location_id`/`to_location_id`,

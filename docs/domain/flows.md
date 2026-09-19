@@ -60,7 +60,8 @@ on_truck ──discharge──▶ discharged (playón) ──store──▶ in_w
 | `discharged`    | `scale`            | lot at scale checkpoint; tolerance checked       |
 | `discharged`    | `store`            | lot at control checkpoint; qty balanced          |
 | `in_warehouse`  | `transfer`         | target location active; not frozen               |
-| any full lot    | `split`            | Σ invariant holds after split                    |
+| any full lot    | `split`            | Σ invariant holds after split |
+| any location lot | `return_to_truck` | not frozen; truck on open manifest; qty ≤ available (Fase 9, ADR 0010) |
 | any            | `quarantine`       | supervisor; reason required                      |
 | any            | `seizure`          | supervisor; legal_ref required                   |
 | `in_quarantine`/`seized` | `release` | supervisor; resolution note required        |
