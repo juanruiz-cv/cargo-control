@@ -11,6 +11,34 @@ Canonical state sets per entity. These map to the status enums in
 ## truck_status
 `available | in_playon | in_route | out_of_service | inspection`
 
+### truck_status display map (Fase 7, ADR 0008)
+
+The UI badge shows one of 13 display codes, **derived read-side** — never
+stored. Precedence (first match wins), reading only: base `trucks.status`,
+`movements`/`movement_items` (latest first), and **open**
+`scanner_operations` / `scale_operations` / `quarantine_operations` /
+`seizure_operations`.
+
+| # | Display code | Source signal |
+| -- | ------------ | ------------- |
+| 1 | `RETAINED` | open `quarantine_operations` |
+| 2 | `SEIZED` | open `seizure_operations` |
+| 3 | `IN_SCANNER` | open `scanner_operations` |
+| 4 | `IN_SCALE` | open `scale_operations` |
+| 5 | `PARTIALLY_UNLOADED` | discharge/split movements exist **and** on-truck `item_lots` remain |
+| 6 | `UNLOADED` | discharge/split complete, no on-truck lots |
+| 7 | `IN_PROCESS` | latest movement is discharge/split/transfer/store and open |
+| 8 | `READY_TO_EXIT` | base `available` + no open ops + cargo released |
+| 9 | `WAITING` | base `available` + latest movement `arrival`, no open ops yet |
+| 10 | `EXPECTED` | manifest exists, no `arrival` movement yet |
+| 11 | `ARRIVED` | latest movement `arrival`, no subsequent movement |
+| 12 | `IN_PLAYON` | base `in_playon` |
+| 13 | `EXITED` | latest movement `egress` |
+| — | `IN_ROUTE` / `OUT_OF_SERVICE` / `INSPECTION` | pass-through when no movement/op applies |
+
+Entry/exit for display: ingreso = first `arrival` movement timestamp; egreso
+= last `egress` movement timestamp (both derived, ADR 0008 §3).
+
 ## driver_status
 `active | disabled`
 

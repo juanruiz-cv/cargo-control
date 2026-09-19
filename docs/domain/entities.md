@@ -91,6 +91,11 @@ or transferred. State lives at lot level; a manifest's status is a rollup.
   (unique), `capacity_kg`, `status
   (available|in_playon|in_route|out_of_service|inspection)`.
   - 1─N `cargo_manifests`; holds on-truck remnants via `item_lots.current_truck_id`.
+  - **Display projection (Fase 7, ADR 0008):** `status` is the fleet **base**
+    status only. The UI badge renders one of 13 display states derived
+    read-side from base status × latest movement × open operations
+    (map: `docs/domain/states.md` §truck_status display map). Entry/exit are
+    `arrival`/`egress` movements, **not** stored date/status columns.
 
 ### Cargo
 
