@@ -23,6 +23,7 @@ change to the project must be recorded here and/or as an ADR file under
 | 13 | CAMIONES trucks module (ADR 0008): 13 display states derived (5 fleet base kept), entry/exit as movements, lazy loading | Accepted | 2026-09-19 |
 | 14 | CARGAMENTOS cargo module (ADR 0009): divisible merchandise via item lots + movement spine, currentLocation derived, category/observations columns (v4) | Accepted | 2026-09-19 |
 | 15 | Motor de movimientos movement engine (ADR 0010): transactional contract over the spine, return_to_truck kind, operation_key idempotency (v5) | Accepted | 2026-09-19 |
+| 16 | Áreas operativas especiales (ADR 0011): scanner/balanza as checkpoints, rezago/secuestro as holds, derived queues, no-delete history doctrine (v6 views) | Accepted | 2026-09-19 |
 
 ## Record 1 — Bootstrap on Supabase (no NestJS)
 
@@ -312,3 +313,33 @@ reads reuse existing RLS. Concurrency and edge cases specified as ME-*
 scenarios. See `docs/adr/0010-movement-engine.md`,
 `docs/architecture/movement-engine.md`, `docs/ux/movements-timeline.md`,
 `docs/qa/movement-engine-tests.md`.
+
+## Record 16 — Áreas operativas especiales (ADR 0011)
+
+**Context:** Fase 10 (Prompt 11) requires the four special operational
+areas SCANNER, BALANZA, REZAGO and SECUESTRO — special locations with
+their own rules, each with full operation history that must never be
+deleted.
+
+**Decision:** the areas map onto the EXISTING specialized operation
+tables and checkpoint locations with **zero new columns**. SCANNER and
+BALANZA are special locations of type checkpoint (`scan`/`scale`);
+REZAGO and SECUESTRO are **holds on the lot, not locations** — an open
+case freezes (rezago) or blocks (secuestro) the lot, enforced by the
+Fase 9 engine. Every requested field resolves to an existing column or a
+derived read (pending queues = derived `station_queue` view; secuestro
+documentation = existing `attachments` polymorphic ref to
+`seizure_operation`; balance truck = derived from lot placement).
+History doctrine: scanner/scale are append-only (no UPDATE/DELETE
+grants); hold cases are never deleted, resolution is a `release`
+movement plus a server-side status update only. No new permission codes;
+RLS/RBAC unchanged (asserted). Schema v6 documents derived views only —
+no migration.
+
+**Consequences:** the four areas ship as spec + UX + QA (SA-* cases
+including no-delete negative tests); operations stay in the movement
+timeline and audit; holds cannot be bypassed through the UI because the
+engine rejects movements of frozen/blocked lots. See
+`docs/adr/0011-special-operational-areas.md`,
+`docs/architecture/special-areas.md`, `docs/ux/special-areas.md`,
+`docs/qa/special-areas-tests.md`.
