@@ -15,6 +15,8 @@ change to the project must be recorded here and/or as an ADR file under
 | 5 | English for all technical artifacts and code | Accepted | 2026-09-19 |
 | 6 | Brand system: token-based design system, Inter, Lucide, status semantics | Accepted | 2026-09-19 |
 | 7 | Quantity + lots merchandise model (item_lot), partial discharge with on_truck remnant | Accepted | 2026-09-19 |
+| 8 | Physical location vs visual layout separation (facilities/locations vs layouts/elements) | Accepted | 2026-09-19 |
+| 9 | Movement spine + specialized operations; Fase 3 table renames | Accepted | 2026-09-19 |
 
 ## Record 1 — Bootstrap on Supabase (no NestJS)
 
@@ -96,3 +98,42 @@ cargo status is a rollup. Introduce `driver` registry; `on_truck` remnant via
 event volume grows with lots (mitigated in `docs/architecture/risks.md`);
 replaces the atomic-`cargo_unit`-only model (barcode scanning remains a
 secondary option per lot). See `docs/adr/0003-item-lot-quantity-model.md`.
+
+## Record 8 — Physical location vs visual layout separation
+
+**Context:** the warehouse map must be freely editable without ever touching
+operational truth. Fase 2's `warehouse_location` merged both concerns and
+could not express multiple maps, decorations, or a visual change that never
+alters stock.
+
+**Decision:** two independent submodels. `facilities` + `locations` own
+capacity and operational rules (occupancy/inventory derived from `item_lots`);
+`layouts` + `layout_elements` own presentation only (`x/y/width/height/
+rotation/color/icon/z_index`), optionally linked to a location. Layout data
+never holds operational values; location data never holds visual values; a
+location may appear in zero or many layouts; archiving a location never
+removes its markers.
+
+**Consequences:** layout edits are zero-risk for stock; single source of truth
+via the ADR 0003 balance invariant; one extra join when rendering markers.
+See `docs/adr/0004-location-vs-layout-separation.md`.
+
+## Record 9 — Movement spine + specialized operations (Fase 3 renames)
+
+**Context:** Fase 3 prompt required a data model with `Movement`/`MovementItem`
+and four operation types, plus a cleaner tenancy (Organization → Facility).
+
+**Decision:** keep the append-only event spine but normalize it:
+`checkpoint_events` becomes `movements` (1 movement may affect several lots)
+with per-lot detail in `movement_items`. Device/detail data moves to
+specialized operation tables (`scanner_operations`, `scale_operations`,
+`quarantine_operations`, `seizure_operations`) that reference a movement.
+Tenancy gains `facilities` (multi-facility/multi-warehouse ready); identity
+gains `roles`/`permissions` via join tables; `drivers`/`trucks` belong to
+`transport_companies`; `cargo` becomes `cargo_manifests`; `documents` become
+`attachments`. ADR 0003 (`item_lots`) and the RLS default-deny policy are
+preserved. Full map: `docs/architecture/database.md` §7.
+
+**Consequences:** normalized multi-lot events and per-operation detail without
+polluting the spine; entity vocabulary now matches the Fase 3 prompt while
+Fase 0–2 documents remain translatable via the rename map.
