@@ -4,7 +4,7 @@ Canonical state sets per entity. These map to the status enums in
 `docs/domain/entities.md` and to the UI status mapping in
 `docs/brand/colors.md`.
 
-## operator_role
+## user_role (roles.code)
 `admin | supervisor | operator | guard | auditor`
 
 ## truck_status
@@ -17,33 +17,42 @@ Canonical state sets per entity. These map to the status enums in
 `pending` (receives → `on_truck`) | `discharged` | `distributed` | `closed`
 
 ## item_lot_status
-- `on_truck` — remanente que aún viaja con el camión
-- `discharged` — bajado del camión, en playón/control
-- `checked` — pasó scanner
-- `in_warehouse` — en sector/ubicación del galpón
-- `loaded_out` — salió cargado en un camión (egreso de mercadería)
+- `on_truck` — remnant still on the truck (remanente)
+- `discharged` — discharged at playón/control
+- `checked` — passed scanner
+- `in_warehouse` — stored in a sector/bin of the facility
+- `loaded_out` — left loaded on a truck (goods egress)
 - Holds (superseding):
   - `in_quarantine` — **rezago** (warning)
   - `seized` — **secuestro** (blocked)
-  - `released` — retornado a ciclo normal tras un hold
+  - `released` — returned to the normal cycle after a hold
 
-## location_type (item_lot)
-`playon | warehouse | checkpoint | truck`
+## item_lot placement
+A lot is at rest in exactly one physical place (never both, never a layout):
+- `current_location_id` → `locations` (playón, control, sector/bin)
+- `current_truck_id` → `trucks` (on-truck remnant)
 
-## warehouse_location_type
-`site | zone | bin` (+ functional checkpoints `scanner | balanza | control`)
+## location_type (locations.type)
+`zone | bin | playon | checkpoint` (+ `checkpoint_kind`: `scan | scale | control`
+when `type = checkpoint`; `facilities` cover the former `site` type)
 
-## checkpoint_kind (event)
+## movement_kind (movements.kind)
 `arrival | discharge | split | transfer | scan_in | scan_out | scale |
  store | load_out | quarantine | seizure | release | egress | correction`
 
-## quarantine_case_status (rezago)
+## facility_type
+`warehouse | site | plant`
+
+## layout_status
+`draft | published | archived`
+
+## quarantine_operation_status (rezago)
 `open | resolved | released`
 
-## seizure_status (secuestro)
+## seizure_operation_status (secuestro)
 `open | resolved`
 
-## cargo rollup
+## cargo_manifest rollup
 `received | in_playon | in_control | discharging | discharged | distributed | closed`
 (derived from item/lot states — see `flows.md`)
 

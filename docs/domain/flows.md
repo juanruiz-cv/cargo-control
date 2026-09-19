@@ -1,13 +1,13 @@
 # Flows — Cargo Control
 
 State machines for the main flow. Guards validate transitions; every transition
-emits an append-only `checkpoint_event`.
+emits an append-only `movement` (with per-lot `movement_items`).
 
 ## Overall flow
 
 ```
 INGRESO DEL CAMIÓN
-        ↓  (cargo + manifest, items on_truck)
+        ↓  (manifest, items on_truck)
       PLAYÓN
         ↓  (truck arrives at yard bay)
      CONTROL
@@ -21,13 +21,14 @@ ALMACENAMIENTO / SCANNER / BALANZA / REZAGO / SECUESTRO
       EGRESO
 ```
 
-## Cargo (rollup)
+## Cargo manifest (rollup)
 
 `received` → `in_playon` → `in_control` → `discharging` → `discharged`
 → `distributed` → `closed` (all quantities handled and truck egressed)
 
-- Cargo status is a **rollup** of its item/lot states; a cargo is `closed` when
-  balance holds, holds are resolved, and the truck egressed.
+- Manifest status is a **rollup** of its item/lot states; a manifest is
+  `closed` when the quantity balance holds, holds are resolved, and the truck
+  egressed.
 
 ## Item
 
@@ -52,21 +53,21 @@ on_truck ──discharge──▶ discharged (playón) ──store──▶ in_w
 
 ## Guard table (lot transitions)
 
-| From            | Event              | Guard                                             |
-| --------------- | ------------------ | ------------------------------------------------- |
-| `on_truck`      | `discharge`        | cargo `in_playon`; qty ≤ current lot              |
-| `discharged`    | `scan`             | lot at scanner checkpoint                         |
-| `discharged`    | `scale`            | lot at scale checkpoint; tolerance checked        |
-| `discharged`    | `store`            | lot at control checkpoint; qty balanced           |
-| `in_warehouse`  | `transfer`         | target location active; not frozen                |
-| any full lot    | `split`            | Σ invariant holds after split                     |
-| any            | `quarantine`       | supervisor; reason required                       |
-| any            | `seizure`          | supervisor; legal_ref required                    |
+| From            | Movement           | Guard                                            |
+| --------------- | ------------------ | ------------------------------------------------ |
+| `on_truck`      | `discharge`        | manifest `in_playon`; qty ≤ current lot          |
+| `discharged`    | `scan`             | lot at scanner checkpoint                        |
+| `discharged`    | `scale`            | lot at scale checkpoint; tolerance checked       |
+| `discharged`    | `store`            | lot at control checkpoint; qty balanced          |
+| `in_warehouse`  | `transfer`         | target location active; not frozen               |
+| any full lot    | `split`            | Σ invariant holds after split                    |
+| any            | `quarantine`       | supervisor; reason required                      |
+| any            | `seizure`          | supervisor; legal_ref required                   |
 | `in_quarantine`/`seized` | `release` | supervisor; resolution note required        |
-| any            | `load_out`         | not frozen; egress acknowledged                   |
+| any            | `load_out`         | not frozen; egress acknowledged                  |
 
 ## Egress
 
 - Truck egress records departure time and acknowledges any `on_truck`
-  remnants; `egress` event closes the truck journey and the cargo when
-  balances and holds are resolved.
+  remnants; an `egress` movement closes the truck journey and the manifest
+  when balances and holds are resolved.
