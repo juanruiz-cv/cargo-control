@@ -17,6 +17,7 @@ change to the project must be recorded here and/or as an ADR file under
 | 7 | Quantity + lots merchandise model (item_lot), partial discharge with on_truck remnant | Accepted | 2026-09-19 |
 | 8 | Physical location vs visual layout separation (facilities/locations vs layouts/elements) | Accepted | 2026-09-19 |
 | 9 | Movement spine + specialized operations; Fase 3 table renames | Accepted | 2026-09-19 |
+| 10 | Floor plan editor element taxonomy + schema v2 (physical/visual sync via layout scale) | Accepted | 2026-09-19 |
 
 ## Record 1 — Bootstrap on Supabase (no NestJS)
 
@@ -137,3 +138,30 @@ preserved. Full map: `docs/architecture/database.md` §7.
 **Consequences:** normalized multi-lot events and per-operation detail without
 polluting the spine; entity vocabulary now matches the Fase 3 prompt while
 Fase 0–2 documents remain translatable via the rename map.
+
+## Record 10 — Floor plan editor: element taxonomy + schema v2
+
+**Context:** Fase 4 requires a data-driven floor plan editor whose elements
+have identity, physical dimensions (meters), capacity, visual properties
+(pixels) and operational flags — with a taxonomy spanning places and
+architectural features (`playon | warehouse | storage | scanner | scale |
+quarantine | seizure | corridor | door | other`). The Fase 3 draft's
+`layout_elements.kind` and forced marker↔location link could not express
+visual-only elements (doors, corridors).
+
+**Decision:** adopt the editor taxonomy as `layout_elements.element_type`
+(replacing `kind`); place types require a linked `location`, while corridor/
+door/other may be visual-only. Physical dimensions and capacity live only on
+`locations` (`physical_width/height/depth`, `physical_unit`,
+`capacity_max_units/kg/volume_m3`); visual fields live only on
+`layout_elements` (`x/y/visual_width/visual_height/rotation/z_index/color/
+icon`), plus editor state `is_locked`/`is_visible`. `isActive` maps to
+`locations.active`. The only bridge between meters and pixels is
+`layouts.scale` (px/m), used read-side. Deleting an element never deletes its
+location; duplicating a place clones both.
+
+**Consequences:** schema evolves to v2 (pre-implementation, no migration);
+one taxonomy drives editor defaults (icons/colors) and the link rule; the
+editor structurally cannot corrupt stock truth. See
+`docs/adr/0005-floor-plan-editor-taxonomy.md` and
+`docs/architecture/floor-plan-editor.md`.
