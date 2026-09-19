@@ -548,3 +548,51 @@ and DECISION LOG had stalled at Fase 14 / Record 21 while Fases 15-20
 (spect + UX + docs) shipped — DOC-AS-3 makes that a fail next time, not
 a chore. See docs/architecture/documentation.md,
 docs/qa/documentation-tests.md, docs/domain/README.md, ADR 0020.
+
+## Record 23 — Complete professional GitHub development doctrine (ADR 0021)
+
+**Date:** Fase 22 (per the phase status line, README l9 — bumped to 22
+in this same close by DOC-AS-1/3).
+
+**Context — problem being decided:** The product documentation is
+complete (Fases 1-21, product + domain + architecture + brand + ux +
+security + qa + decision records + ADR 0019-0021). Before shipping through
+GitHub professionally the repository needs an explicit doctrine for its
+professional GitHub workflow: branch topology, branch naming, commit
+conventions, repository surface, and the hard exclusion of secrets,
+tokens, service keys, and real data.
+
+**Decision:** Complete professional GitHub development doctrine,
+recorded as ADR 0021 (docs/adr/0021-github-development-doctrine.md,
+commit 7cba35f): branch topology (main principal/protected + develop
+integration + feature branches through pull requests, no direct push),
+branch-naming convention (feature/ fix/ refactor/ docs/ chore/),
+conventional commits (feat: fix: refactor: docs: test: chore:), repo
+surface doctrine (CONTRIBUTING.md, CHANGELOG.md, SECURITY.md,
+CODEOWNERS; README as docs index), and hard secret exclusion (never
+commit .env, secrets, tokens, service keys, or real user data — asserts
+GIT-AS-1..5 enforce this in docs/qa/github-tests.md, commit dc9f5a8).
+
+**Why — motivation:** The repository is being prepared for professional
+GitHub-hosted development; the doctrine makes the branch topology,
+commit discipline, and secret exclusion explicit and asserted before any
+real GitHub collaboration starts.
+
+**Who decided:** Repository steward (fase 22 orchestrator), per ODD
+(organic driven development) — the GitHub development doctrine phase.
+
+**Risks and reservations:** Branch protection and remote push are NOT
+performed by this phase (ADR 0021 §Consequences: configuring the GitHub
+remote and enabling protected branches is a delivery/repository-policy
+decision that belongs to the maintainer; this fase only writes and
+commits the doctrine). Secrets were never committed and stay excluded by
+GIT-AS-5 assertion.
+
+**Key learning:** SECURITY.md already existed tracked from a prior fase
+(DOC-2 one home per topic) — it was NOT recreated; the root-surface
+homes this fase created were CONTRIBUTING.md, CHANGELOG.md, and
+CODEOWNERS, each one committed in its own part commit (one ability per
+commit, DOC-3), and the doctrine/QA/odd mirrors each got a separator
+commit per phase doctrine (DOC-2/DOC-5).
+
+**Status:** Accepted and closed — Fase 22 complete.
