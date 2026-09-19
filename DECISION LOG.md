@@ -415,3 +415,37 @@ beyond views. See `docs/adr/0013-operational-dashboard.md`,
 `docs/architecture/operational-dashboard.md`,
 `docs/ux/operational-dashboard.md`,
 `docs/qa/operational-dashboard-tests.md`.
+
+## Record 19 — Sistema de auditoría (ADR 0014)
+
+**Context:** Fase 13 (Prompt 14) requires the AUDITORÍA system: register
+16 critical actions (crear, editar, eliminar, transferir, descargar,
+cargar, pesar, escanear, rezagar, secuestrar, ingresar camión, egresar
+camión, modificar capacidad, modificar layout, modificar permisos);
+AuditLog with id, userId, action, entity, entityId, timestamp,
+previousData, newData, metadata; regular operators cannot modify logs;
+UI AuditList, AuditDetails, AuditFilters, AuditTimeline with filters
+usuario/acción/entidad/fecha/camión/mercadería; no history deletion via
+the UI.
+
+**Decision:** the existing `audit_log` spine (Fase 3) is the single
+audit source — no second table. The prompt shape maps onto it
+(userId=actor_id, entity=entity_type, entityId=entity_id,
+timestamp=created_at, previousData=before, newData=after); schema
+**v9** adds only `audit_log.metadata jsonb` (nullable) for structured
+context. The 16 actions become a stable `entity.verb` catalog
+(truck.create, truck.arrival, truck.egress, cargo.create/edit/delete,
+movement.transfer/discharge, operation.load/scale/scan/quarantine/
+seizure, capacity.set, layout.edit, permission.change). Append-only is
+final: no INSERT/UPDATE/DELETE client grants (trigger/engine-only),
+reads via `audit.read` (admin + auditor); the UI is a read-only
+projection with no delete/edit/clear affordance; retention/archival, if
+ever needed, is operational maintenance outside the app. No new
+permission codes; RLS/RBAC unchanged (asserted).
+
+**Consequences:** the audit system ships as spec + UX + QA (AU-* cases,
+50 scenarios covering every critical action, shape/metadata, append-only
+negative tests, all six filters, UI components, permissions and org
+isolation). One new column; no policy changes. See
+`docs/adr/0014-audit-system.md`, `docs/architecture/audit.md`,
+`docs/ux/audit.md`, `docs/qa/audit-tests.md`.
