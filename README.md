@@ -6,7 +6,7 @@ Track every load from arrival to departure: trucks, cargo units, warehouse
 movements, scale and scanner checkpoints, quarantines, seizures, and complete
 audit trails.
 
-> **Status: Fase 10 — Áreas operativas especiales (Scanner, Balanza, Rezago, Secuestro): spec + QA.** This repository currently contains
+> **Status: Fase 11 — Mapa operativo (main screen, operational map): spec + UX + QA.** This repository currently contains
 > architecture and domain documentation only. No business features are
 > implemented yet by design. No fictional data is seeded that could be confused
 > with production data.
@@ -51,9 +51,9 @@ audit trails.
 - [docs/product](./docs/product) — product and modules
 - [docs/architecture](./docs/architecture) — full architecture details (DB, deps, risks)
 - [docs/domain](./docs/domain) — domain model and entities
-- [docs/ux](./docs/ux) — design system, routes and components (incl. trucks, Fase 7; cargo, Fase 8; movements timeline, Fase 9; special areas, Fase 10)
+- [docs/ux](./docs/ux) — design system, routes and components (incl. trucks, Fase 7; cargo, Fase 8; movements timeline, Fase 9; special areas, Fase 10; operational map, Fase 11)
 - [docs/security](./docs/security) — threat model and RLS matrix
-- [docs/qa](./docs/qa) — QA and testing strategy (incl. trucks, Fase 7; cargo, Fase 8; movement engine, Fase 9; special areas, Fase 10)
+- [docs/qa](./docs/qa) — QA and testing strategy (incl. trucks, Fase 7; cargo, Fase 8; movement engine, Fase 9; special areas, Fase 10; operational map, Fase 11)
 - [docs/brand](./docs/brand) — brand system and design tokens (Fase 1)
 - [docs/adr](./docs/adr) — Architecture Decision Records
 

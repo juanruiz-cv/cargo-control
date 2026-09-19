@@ -343,3 +343,41 @@ engine rejects movements of frozen/blocked lots. See
 `docs/adr/0011-special-operational-areas.md`,
 `docs/architecture/special-areas.md`, `docs/ux/special-areas.md`,
 `docs/qa/special-areas-tests.md`.
+
+## Record 17 — Mapa operativo (ADR 0012)
+
+**Context:** Fase 11 (Prompt 12) requires the main screen — MAPA
+OPERATIVO — visually representing PLAYÓN, GALPÓN, SECTORES 1-12,
+SCANNER, BALANZA, REZAGO and SECUESTRO. The layout must be loaded from
+Supabase (never hardcoded); each element shows name, code, state,
+occupancy and capacity; the playón shows present trucks; selecting a
+truck/sector/special area shows its detail; zoom, pan, fit-to-screen,
+legend and filters are required; states are LIBRE, PARCIAL, OCUPADO,
+BLOQUEADO, MANTENIMIENTO; the interface must update states without
+redrawing the whole application.
+
+**Decision:** the map is a **read projection** of the published layout
+plus occupancy, trucks and holds — it adds no new domain model. The
+layout is loaded from `layouts.status = 'published'` +
+`layout_elements` (Fase 4, ADR 0005); occupancy/capacity come from the
+`location_occupancy` view (Fase 5, ADR 0006); trucks present from
+`trucks.status = 'in_playon'` (Fase 7, ADR 0008); special-area info from
+the Fase 10 spec (ADR 0011). The five visual states are a read-side
+projection: LIBRE/PARCIAL/OCUPADO derive from occupancy vs capacity,
+BLOQUEADO derives from open holds on lots at the location, and
+**MANTENIMIENTO is the only stored state** — the single schema delta is
+`locations.maintenance boolean not null default false` (schema v7).
+Selection panels reuse existing module projections (trucks + timeline,
+capacity + cargo + timeline, scanner/scale queues, holds) — no
+duplicated screen logic. Live updates consume per-element change signals
+and re-render only the affected element — no full application redraw.
+No new permission codes; RLS/RBAC unchanged (asserted); map read =
+`warehouse.read`, detail panels reuse module read permissions.
+
+**Consequences:** the main screen ships as spec + UX + QA (OM-* cases,
+83 scenarios covering layout-from-DB/no-hardcoding, 5-state derivation,
+playón trucks, selection panels, zoom/pan/fit/legend/filters, keyed live
+updates without full redraw, permissions and org isolation). Only one
+new column. See `docs/adr/0012-operational-map.md`,
+`docs/architecture/operational-map.md`, `docs/ux/operational-map.md`,
+`docs/qa/operational-map-tests.md`.
