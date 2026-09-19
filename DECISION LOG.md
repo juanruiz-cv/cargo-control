@@ -484,3 +484,51 @@ changes. See `docs/adr/0015-layout-versioning.md`,
 `docs/architecture/floor-plan-versioning.md`,
 `docs/ux/floor-plan-versioning.md`,
 `docs/qa/floor-plan-versioning-tests.md`.
+
+## Record 21 — Professional UX Doctrine (ADR 0016)
+
+**Context:** Prompt 16 asked for a complete UX audit optimizing speed,
+density, reading, search, keyboard, feedback diagnosis and error
+prevention across navigation, sidebar, header, tables, forms, modals,
+confirmations, errors, loading and empty states — and to implement
+keyboards shortcuts only where useful, debounce, **optimistic UI only
+where safe**, skeleton loading, toasts and confirmation dialogs — without
+sacrificing clarity for aesthetics.
+
+**Decision:** adopt ADR 0016 — a normative cross-cutting **Professional UX
+Doctrine** with three central mechanics: (1) **optimistic-UI boundary** —
+optimistic is permitted only where rollback is trivial, there is no
+append-only/legally meaningful side effect, audit/history cannot silently
+desync, and failure can't leave ghost state; the explicit **safe list** is
+visual density/nav prefs, column/sort view prefs, search debounce and
+map pan/zoom/layer toggles; **never optimistic**: any `movements`
+write, `capacity.set`, quarantine/seizure/release, role/permission
+changes, `layout.publish`/`restore` and any op that emits an `audit_log`
+row — movements are append-only so "optimistic movement" is impossible by
+construction. (2) **Timing doctrine** — search/filter debounce **300 ms**
+(normative, kept from cargo/timeline), never debounce a confirmation or
+destructive command, results rendered when a query resolves before the
+debounce window (no forced spinner). (3) **Confirmation doctrine** —
+second-click guard on destructive actions; publish/restore keep their
+Fase 14 confirm with version + diff preview. Keyboard shortcuts only for
+high-frequency keyboard-relevant commands (floor plan editor table becomes
+normative; global Alt/Ctrl+Shift module nav; `aria-keyshortcuts` + Help
+dialog; no hidden chords). Dense tables are default for operational lists
+with min 28px targets and color + label status (never color alone).
+Skeletons for cold navigation; no new spinners where a skeleton exists.
+
+**Consequences:** the document is **normative**, higher rank than per-module
+UX docs (modules may only extend, never relax; each gets an
+"Compiles with UX Doctrine" assertion). New `UX-*` QA suite
+(60 scenarios) asserts tight coupling with Fase 14: **UX-31 exclusive —
+the restore→publish flow must present the publish confirmation (version +
+diff preview) EXACTLY once, and optimistic UI must NEVER appear on restore/
+publish/movement paths**. No schema, policy or permission change (visual/
+interaction only, asserted in rls + rbac). PEP aligned: nothing in the
+doctrine contradicts it. See
+`docs/architecture/ux-doctrine.md`,
+`docs/ux/professional-ux.md`,
+`docs/qa/ux-professional-tests.md`, ADR 0016, design-tokens Fase 15
+section.
+
+## Record 20 — layout versioning (ADR 0015)
