@@ -794,6 +794,19 @@ Timeline read is covered by the existing `movements_org_time_idx`
 (organization_id, occurred_at desc) — asserted, no extra index. No
 other DDL change, no renames.
 
+Schema **v6** (Fase 10 special operational areas, ADR 0011): **no new
+columns.** Documented read-side derived views:
+- `station_queue` — lots placed at a `scan`/`scale` checkpoint without a
+  completed `scanner_operations`/`scale_operations` row for the current
+  placement (feeds the pending queues).
+- `hold_open` — open `quarantine_operations`/`seizure_operations` with
+  lot/item context (frozen/blocked visibility).
+Append-only asserts (ADR 0011): `scanner_operations`,
+`scale_operations` have no UPDATE/DELETE grants (same policy as
+movements); `quarantine_operations`/`seizure_operations` cases are
+never deleted — resolution is a `release` movement (Fase 9 engine) plus a
+server-side status update only. No DDL change, no renames.
+
 ## 8. Design rules (enforced in the data layer)
 
 - `movements`, `movement_items`, `audit_log` are **append-only**: corrections are

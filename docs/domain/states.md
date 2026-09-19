@@ -97,8 +97,24 @@ ADR 0010).
 ## quarantine_operation_status (rezago)
 `open | resolved | released`
 
+- `open` **freezes** the lot (no movement of it; Fase 9 engine rejects).
+- `resolved`/`released` after the server-side supervisor `release`
+  flow (movement + status update); the case row is NEVER deleted
+  (Fase 10, ADR 0011 — full history kept).
+
 ## seizure_operation_status (secuestro)
 `open | resolved`
+
+- `open` **blocks** the lot (no movement of it at all).
+- `resolved` after the server-side supervisor `release` flow; case row
+  NEVER deleted (Fase 10, ADR 0011). Legal docs live as `attachments`
+  scoped to the case.
+
+## scanner_result (scanner_operations.result)
+`success | not_found | ambiguous | error`
+
+- Every capture produces a row, including non-success results
+  (historical fact; Fase 10).
 
 ## cargo_manifest rollup
 `received | in_playon | in_control | discharging | discharged | distributed | closed`

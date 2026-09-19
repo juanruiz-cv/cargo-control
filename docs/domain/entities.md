@@ -151,18 +151,24 @@ or transferred. State lives at lot level; a manifest's status is a rollup.
 - **scanner_operation** — barcode/QR capture: `id`, `movement_id`,
   `item_lot_id`, `scanned_code`, `device_id`, `result
   (success|not_found|ambiguous|error)`, `payload`, `scanned_at`, `operator_id`.
+  Append-only; even not_found/error results are historical rows.
 - **scale_operation** (was `scale_reading`) — weight record: `id`,
   `movement_id`, `item_lot_id`, `gross_kg`, `tare_kg`, `net_kg`,
   `expected_kg`, `tolerance_kg`, `within_tolerance`, `device_id`,
-  `weighed_at`, `operator_id`.
+  `weighed_at`, `operator_id`. Weigh unit: kg (item uom shown alongside).
+  Truck context derived from lot placement (Fase 10).
 - **quarantine_operation** (rezago; was `quarantine_case`) — hold with
   lifecycle: `id`, `movement_id` (opening movement), `item_lot_id`, `reason`,
   `status (open|resolved|released)`, `opened_by`, `opened_at`, `resolved_by`,
-  `resolved_at`, `resolution_note`. Open case **freezes** the lot.
+  `resolved_at`, `resolution_note`. Open case **freezes** the lot. Case
+  NEVER deleted; resolution = `release` movement + server-side status
+  update (Fase 10, ADR 0011). See `station_queue` view note.
 - **seizure_operation** (secuestro; was `seizure_record`) — legal hold:
   `id`, `movement_id`, `item_lot_id`, `legal_ref`, `status (open|resolved)`,
   `opened_by`, `opened_at`, `resolved_by`, `resolved_at`, `resolution_note`.
-  Open record **blocks** the lot.
+  Open record **blocks** the lot; legal docs attach via `attachment`
+  (`entity_type = seizure_operation`); case never deleted (Fase 10,
+  ADR 0011).
 
 ### Support
 

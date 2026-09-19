@@ -112,6 +112,17 @@ existing row policies; movements are never directly writable by the
 client. `operation_key` is a data column, not an authorization axis.
 **No policy edits or new codes.**
 
+## Fase 10 special operational areas — no policy change (ASSERTED)
+
+The SCANNER/BALANZA/REZAGO/SECUESTRO areas (Fase 10, ADR 0011) reuse the
+existing `scanner.*`, `scale.*`, `quarantine.*`, `seizure.*` permissions
+and row policies verbatim: `scanner_operations`, `scale_operations`
+remain append-only (no UPDATE/DELETE grants); `quarantine_operations`/
+`seizure_operations` cases are never deleted, resolution is server-side
+(`release` via the Fase 9 engine) and only updates case status.
+Derived views (`station_queue`, `hold_open`) are read-only through
+existing policies. **No policy edits or new codes.**
+
 ## Isolation guarantees
 
 1. Cross-org: `has_permission` binds to the caller's own `organization_id`;

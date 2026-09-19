@@ -92,6 +92,15 @@ for its kind (split → `cargo.update`, transfer/return_to_truck →
 **No new permission codes** — `operation_key` is engine data, not an
 authorization axis.
 
+## Fase 10 special operational areas — no RBAC change (ASSERTED)
+
+The SCANNER/BALANZA/REZAGO/SECUESTRO areas (Fase 10, ADR 0011) use the
+existing catalog: `scanner.read/create`, `scale.read/create`,
+`quarantine.read/create`, `seizure.read/create`; hold resolution remains
+a server-side supervisor flow (no new codes). Derived queues and
+history are read projections of the same permissions. **No new
+permission codes.**
+
 ## 4. Seeds
 
 ```sql
