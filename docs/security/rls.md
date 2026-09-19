@@ -1,71 +1,100 @@
-# RLS Permission Matrix — Cargo Control
+# RLS Policy Matrix — Cargo Control (Fase 6 / Prompt 07)
 
-RLS is enabled on every business table. Policy type per role — `Y` allows the
-operation, `-` denies. **Default deny**: anything not listed is denied.
-Table names follow the Fase 3 schema (rename map: `docs/architecture/database.md` §7).
+RLS is enabled on every business table. **Default deny**: anything not listed
+is denied. Policies evaluate **permission codes** through
+`public.has_permission(code)` (and `has_role` for tenant tables), never a
+hardcoded role list per table and never a client flag. Grant changes are data
+(`role_permissions` seeds), not policy edits.
 
-## Roles
+Helpers: `docs/security/authorization.md`. Catalog & matrix:
+`docs/security/rbac.md`.
 
-- `admin` — full CRUD incl. settings, user management and floor plan editor
-- `supervisor` — operational + quarantine/seizure decisions
-- `operator` — cargo manifests, lots, locations, movements
-- `guard` — scanner/scale operations only
-- `auditor` — read-only audit and reports
+## Policy shape
 
-## Matrix (reads)
+```sql
+-- read: any grant that includes the read code
+create policy location_read on public.locations
+  for select using (public.has_permission('warehouse.read'));
 
-| Table                          | admin | supervisor | operator | guard | auditor |
-| ------------------------------ | :---: | :--------: | :------: | :---: | :-----: |
-| organizations                  | Y     | Y          | Y        | Y     | Y       |
-| facilities                     | Y     | Y          | Y        | Y     | Y       |
-| locations                      | Y     | Y          | Y        | Y     | Y       |
-| layouts, layout_elements       | Y     | Y          | Y        | Y     | Y       |
-| users                          | Y     | –          | –        | –     | –       |
-| roles, permissions, user_roles, role_permissions | Y | –    | –        | –     | –       |
-| parties                        | Y     | Y          | Y        | Y     | Y       |
-| transport_companies            | Y     | Y          | Y        | Y     | Y       |
-| drivers                        | Y     | Y          | Y        | Y     | Y       |
-| trucks                         | Y     | Y          | Y        | Y     | Y       |
-| cargo_manifests                | Y     | Y          | Y        | Y     | Y       |
-| cargo_items                    | Y     | Y          | Y        | Y     | Y       |
-| item_lots                      | Y     | Y          | Y        | Y     | Y       |
-| movements, movement_items      | Y     | Y          | Y        | Y     | Y       |
-| scanner_operations             | Y     | Y          | Y        | Y     | Y       |
-| scale_operations               | Y     | Y          | Y        | Y     | Y       |
-| quarantine_operations          | Y     | Y          | Y        | –     | Y       |
-| seizure_operations             | Y     | Y          | Y        | –     | Y       |
-| attachments                    | Y     | Y          | Y        | Y     | Y       |
-| audit_log                      | Y     | –          | –        | –     | Y       |
+-- write: configure gates layout/capacity edits (floor plan editor, Fase 5)
+create policy location_configure on public.locations
+  for insert with check (public.has_permission('warehouse.configure'));
+create policy location_configure_upd on public.locations
+  for update using (public.has_permission('warehouse.configure'))
+             with check (public.has_permission('warehouse.configure'));
 
-## Matrix (writes)
+-- tenant-level row (own org) readable by any authenticated profile of it
+create policy org_profile_read on public.organizations
+  for select using (
+    exists (select 1 from public.users u
+            where u.auth_user_id = auth.uid()
+              and u.organization_id = public.organizations.id));
+create policy org_admin_write on public.organizations
+  for update using (public.has_role('admin'));
+```
 
-| Operation                            | admin | supervisor | operator | guard |
-| ------------------------------------ | :---: | :--------: | :------: | :---: |
-| users / settings / RBAC              | Y     | –          | –        | –     |
-| facilities                           | Y     | Y          | –        | –     |
-| parties, transport_companies, trucks, locations, drivers | Y | Y | Y | – |
-| layouts, layout_elements (editor)    | Y     | Y          | –        | –     |
-| cargo_manifests, cargo_items, item_lots | Y  | Y          | Y        | –     |
-| movements (append)                   | Y     | Y          | Y        | Y     |
-| movement_items (append)              | Y     | Y          | Y        | Y     |
-| scanner_operations, scale_operations (append) | Y | Y | Y | Y |
-| quarantine open/resolve              | Y     | Y          | –        | –     |
-| seizure open/resolve                 | Y     | Y          | –        | –     |
-| attachments (upload)                 | Y     | Y          | Y        | –     |
-| audit_log                            | –     | –          | –        | –     (trigger-only, append)
+## Matrix
 
-## Policy rules
+`S` = SELECT · `I` = INSERT · `U` = UPDATE · `D` = DELETE
+— every cell is a `has_permission(...)` gate unless noted.
 
-- Every policy filters by `org_id` of the acting operator.
-- Event log: INSERT only, no UPDATE/DELETE policies (append-only).
-- Guard cannot read quarantine/seizure detail or audit; appends scanner/scale
-  operations only (was `checkpoint_events` in Fase 0–2).
-- Auditor is strictly read-only.
-- Triggers enforce that sensitive transitions require `reason` and valid source
-  states, independent of RLS.
-- Floor plan editor (`layouts`, `layout_elements`) is a planning tool: writes
-  are admin/supervisor-only; operator and guard read the published map.
-- `attachments` rows are readable in the table via signed Storage URLs only;
-  direct reads follow the matrix.
+| Table | SELECT | INSERT | UPDATE | DELETE |
+| ----- | ------ | ------ | ------ | ------ |
+| organizations | own org profile (any auth) | has_role('admin') | has_role('admin') | – |
+| facilities | warehouse.read | warehouse.configure | warehouse.configure | – |
+| locations | warehouse.read | warehouse.configure | warehouse.configure | – |
+| layouts | warehouse.read | warehouse.configure | warehouse.configure | – |
+| layout_elements | warehouse.read | warehouse.configure | warehouse.configure | – |
+| users | has_role('admin') (profile rows) | has_role('admin') | has_role('admin') (not self-editable by target) | – |
+| roles | has_role('admin') | has_role('admin') | has_role('admin') | – |
+| permissions | has_role('admin') | has_role('admin') | has_role('admin') | – |
+| user_roles | has_role('admin') | has_role('admin') | has_role('admin') | – |
+| role_permissions | has_role('admin') | has_role('admin') | has_role('admin') | – |
+| parties | truck.read | truck.create | truck.update | – |
+| transport_companies | truck.read | truck.create | truck.update | – |
+| drivers | truck.read | truck.create | truck.update | – |
+| trucks | truck.read | truck.create | truck.update | – |
+| cargo_manifests | cargo.read | cargo.create | cargo.update | – |
+| cargo_items | cargo.read | cargo.create | cargo.update | – |
+| item_lots | cargo.read | cargo.update (via movements — see §Spine) | cargo.update (placement changes) | – |
+| movements | (any of cargo.read / scanner.create / scale.create / quarantine.read / seizure.read) | kind → permission map (§Authorization) | **— append-only** | **—** |
+| movement_items | same as movements | mirrors movement kind map | **— append-only** | **—** |
+| scanner_operations | scanner.read | scanner.create | – | – |
+| scale_operations | scale.read | scale.create | – | – |
+| quarantine_operations | quarantine.read | quarantine.create | – | – |
+| seizure_operations | seizure.read | seizure.create | – | – |
+| attachments | any read of owner entity (cargo.read / truck.read / warehouse.read) | owner entity create permission | – | – |
+| audit_log | audit.read | **trigger-only** (no client policy) | **—** | **—** |
+| location_occupancy (view) | security_invoker → base tables | — | — | — |
 
-Referenced by `SECURITY.md`; changes require the RLS review checklist.
+Notes:
+- **Soft lifecycle:** no DELETE policies anywhere — catalogs deactivate
+  (`status`/`active`), business records close, the spine never mutates (D6).
+- **Movement spine:** the INSERT policy for `movements` and `movement_items`
+  is one comprehensive `with check` that branches on `kind` (documented in
+  `docs/security/authorization.md` §3). UPDATE/DELETE policies do not exist.
+- **Read context for stations:** scanner/scale operators read `cargo.*` and
+  `truck.*` rows (matrix above) so the station can display context, but write
+  only their event types.
+- **Auditor/Viewer:** read-only by construction — no insert/update codes are
+  granted in `rbac.md` §3.
+- **Views:** created with `security_invoker = true` so base policies apply
+  (`location_occupancy`, future read models).
+
+## Isolation guarantees
+
+1. Cross-org: `has_permission` binds to the caller's own `organization_id`;
+   a row from another org never satisfies a policy (no `org_id` in the client
+   query can override it).
+2. Disabled profile: helpers check `users.status = 'active'` → zero grants.
+3. Grant change ≠ policy change: `role_permissions` rows are data; RLS picks
+   them up immediately.
+4. Bypass: no `bypassrls` role for the data API; service-key functions run
+   with explicit `security definer` intent only (audit, capacity triggers).
+
+## Files
+
+- Decision: `docs/adr/0007-identity-access-supabase-auth.md`
+- Roles & catalog: `docs/security/rbac.md`
+- Enforcement: `docs/security/authorization.md`
+- Tests: `docs/qa/security-tests.md`
