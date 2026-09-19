@@ -343,7 +343,8 @@ create index users_org_idx on public.users (organization_id);
 
 create table public.roles (
   id          uuid primary key default gen_random_uuid(),
-  code        text not null unique,        -- admin | supervisor | operator | guard | auditor
+  code        text not null unique,        -- admin | supervisor | operator | scanner_operator
+                                            --   | scale_operator | auditor | viewer (Fase 6; guard split)
   name        text not null,
   description text,
   created_at  timestamptz not null default now(),
@@ -352,7 +353,9 @@ create table public.roles (
 
 create table public.permissions (
   id          uuid primary key default gen_random_uuid(),
-  code        text not null unique,        -- e.g. cargo.read, quarantine.resolve
+  code        text not null unique,        -- catalog (20): truck.*/cargo.*/warehouse.*/scanner.*
+                                            --   /scale.*/quarantine.*/seizure.*/audit.read
+                                            --   (docs/security/rbac.md §2)
   name        text not null,
   description text,
   created_at  timestamptz not null default now(),
@@ -372,6 +375,11 @@ create table public.role_permissions (
   permission_id uuid not null references public.permissions(id),
   primary key (role_id, permission_id)
 );
+
+-- RBAC seeds (Fase 6, ADR 0007): 7 roles + 20-permission catalog +
+-- role_permissions matrix, all as DATA in docs/security/rbac.md §3–§4.
+-- RLS evaluates through public.has_permission(code) / has_role(code):
+-- docs/security/rls.md, docs/security/authorization.md.
 
 -- =====================================================================
 -- 4.5 Fleet & counterparties

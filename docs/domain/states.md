@@ -5,7 +5,8 @@ Canonical state sets per entity. These map to the status enums in
 `docs/brand/colors.md`.
 
 ## user_role (roles.code)
-`admin | supervisor | operator | guard | auditor`
+`admin | supervisor | operator | scanner_operator | scale_operator | auditor | viewer`
+(Fase 6 set; Fase 3 `guard` retired — scanner/scale halves inherit)
 
 ## truck_status
 `available | in_playon | in_route | out_of_service | inspection`

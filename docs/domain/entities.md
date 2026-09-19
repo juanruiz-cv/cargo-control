@@ -69,12 +69,15 @@ or transferred. State lives at lot level; a manifest's status is a rollup.
   `id`, `organization_id`, `auth_user_id` (1:1), `email`, `full_name`, `status`.
   - 1─N via `user_roles` to `roles`; MVP: one org per user (multi-org
     membership is a future join table).
-- **role** — `id`, `code` (unique; `admin|supervisor|operator|guard|auditor`),
-  `name`, `description`.
-- **permission** — capability catalog: `id`, `code` (unique, e.g.
-  `cargo.read`, `quarantine.resolve`), `name`, `description`.
+- **role** — `id`, `code` (unique;
+  `admin|supervisor|operator|scanner_operator|scale_operator|auditor|viewer`
+  — Fase 6 set, `guard` retired), `name`, `description`.
+- **permission** — capability catalog: `id`, `code` (unique; the 20-code
+  Fase 6 catalog: `truck.*/cargo.*/warehouse.*/scanner.*/scale.*/
+  quarantine.*/seizure.*` + `audit.read`), `name`, `description`.
 - Cardinalities: `user >─< role` through `user_roles`; `role >─< permission`
-  through `role_permissions`.
+  through `role_permissions`. RLS and Edge Functions both consume the codes
+  (ADR 0007); changing a grant is a `role_permissions` row, not a policy edit.
 
 ### Fleet
 
