@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+.next/
+out/
+
+# environment / secrets
+.env
+.env.*
+!.env.example
+
+# Supabase local
+.supabase/
+
+# Lovable
+.lovable/uploads/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# coverage / test artifacts
+coverage/
