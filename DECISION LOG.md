@@ -449,3 +449,38 @@ negative tests, all six filters, UI components, permissions and org
 isolation). One new column; no policy changes. See
 `docs/adr/0014-audit-system.md`, `docs/architecture/audit.md`,
 `docs/ux/audit.md`, `docs/qa/audit-tests.md`.
+
+## Record 20 — Editor visual avanzado (ADR 0015)
+
+**Context:** Fase 14 (Prompt 15) improves the floor plan editor: layout
+versioning where each version records version, createdBy, createdAt,
+description and changes; create/publish version, view previous version,
+compare versions, restore version. Restoring a visual layout must NOT
+modify movement history (a visual change is not a logistic movement); a
+capacity change DOES require auditing and validations; a visual change
+history is added; publishing a new version requires confirmation.
+
+**Decision:** a `layouts` row IS a version (version + unique
+(facility_id, name, version), ADR 0005) — no separate version table.
+Schema **v10** adds only `layouts.created_by`, `description` and
+`changes jsonb`. Operations: create (version+1 draft), publish
+(draft→published, previous published archived in the same tx, mandatory
+confirmation dialog), view previous (read-only), compare (server-side
+diff of layout_elements), restore (**new** draft version+1 copying
+elements — history rows never mutated). Doctrine **visual ≠ logistic**:
+layout operations never write `movements`; they are administrative
+`audit_log` rows (`layout.create/publish/restore`, plus `layout.edit`).
+Capacity edits keep their existing guard (reduction below occupancy
+rejected by trigger) + `capacity.set` audit unchanged. Permissions
+reuse `warehouse.configure` (create/publish/restore) and
+`warehouse.read` (view/compare); RLS/RBAC unchanged (asserted).
+
+**Consequences:** the editor ships as spec + UX + QA (VE-* cases, 31
+scenarios covering version metadata, all five operations, the
+restore-never-touches-movements guarantee, capacity guard/audit
+preservation, publish/restore confirmations, permissions and org
+isolation). Three nullable metadata columns; no movement or policy
+changes. See `docs/adr/0015-layout-versioning.md`,
+`docs/architecture/floor-plan-versioning.md`,
+`docs/ux/floor-plan-versioning.md`,
+`docs/qa/floor-plan-versioning-tests.md`.
