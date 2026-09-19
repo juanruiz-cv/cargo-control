@@ -375,7 +375,7 @@ No new permission codes; RLS/RBAC unchanged (asserted); map read =
 `warehouse.read`, detail panels reuse module read permissions.
 
 **Consequences:** the main screen ships as spec + UX + QA (OM-* cases,
-83 scenarios covering layout-from-DB/no-hardcoding, 5-state derivation,
+51 scenarios covering layout-from-DB/no-hardcoding, 5-state derivation,
 playón trucks, selection panels, zoom/pan/fit/legend/filters, keyed live
 updates without full redraw, permissions and org isolation). Only one
 new column. See `docs/adr/0012-operational-map.md`,
