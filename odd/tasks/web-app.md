@@ -75,8 +75,9 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 
 | ID | Task | Path/route | Status |
 | -- | -- | -- | -- |
-| T1 | Document hosting contradiction & decision (ADR 0023 + DECISION LOG + README homes bump) | docs, inline | pending |
-| T2 | Scaffold `web/`: Vite + React + TS + Tailwind + shadcn/ui + Lucide + Inter; modular folders (components/pages/hooks/services/types/lib/config/integrations); env template; health page | delegated composite | pending |
+| T1 | Document hosting contradiction & decision (ADR 0023 + odd mirror) | docs, inline | done (1427ae0) |
+| T2 | Scaffold `web/`: Vite + React + TS + Tailwind + shadcn/ui + Lucide + Inter; modular folders (components/pages/hooks/services/types/lib/config/integrations); env template; health page | delegated composite | done (ade14b9, build+lint+spot OK, risk medium, verified) |
+| T3 | Design system: CSS vars `--cc-*` (colors, typography, spacing, radii, z-index, breakpoints) + base UI components | delegated | partial — tokens + 18 primitivas en T2; faltan SearchInput/FilterBar/Combobox/DataTable/StatusBadge (se completan en fases de módulos) |
 | T3 | Design system: CSS vars `--cc-*` from docs/brand (colors, typography, spacing, radii, z-index, breakpoints), base UI components (Button, Input, Select, Combobox, SearchInput, FilterBar, DataTable, Pagination, Badge, StatusBadge, Card, Dialog, Drawer, Tabs, Tooltip, Toast, Alert, ConfirmDialog, PageHeader, Breadcrumbs, EmptyState, LoadingState, ErrorState, Skeleton) | delegated | pending |
 | T4 | DB migrations: schema (25 tables, FKs, indexes, unique, triggers, enums) + RLS (default deny, 7 roles, 20 permissions) + views (occupancy, queues, dashboard) + auth trigger | delegated | pending |
 | T5 | Domain TS types + services layer (supabase-js) + DEMO adapter (same interface, dev-only) | delegated | pending |
@@ -103,10 +104,16 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   choice). Stash `wip docs fases 16-20 pendiente` (hash recorded, recoverable)
   preserved pre-existing uncommitted docs work. Branch `feature/web-app`
   created from `main` (9f1ab0f). This document created before first write.
+- 2026-09-21 (sesión web-app): T1 done (ADR 0023 commit 1427ae0) + T2 done
+  (scaffold commit ade14b9: Vite 8/React 19/TS 6/Tailwind 4/shadcn base-nova,
+  build+lint pass, risk medium, parent spot check OK). T3 base incluida en
+  T2 (tokens --cc-* fieles a docs/brand, 18 primitivas ui + shared/layout).
+  Aviso: lint usa oxlint (create-vite 9 ya no trae ESLint) — convención del
+  scaffold. Rutas especiales según routes-and-components.md (canónico).
 
 ## Next step
 
-T1 (ADR 0023) then T2 scaffold delegation.
+T4 — DB migrations (schema + RLS + triggers + views) según database.md/rls.md/authorization.md/domain. Delegar a writer con docs como spec.
 
 ## Route declarations
 
