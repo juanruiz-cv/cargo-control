@@ -1,13 +1,16 @@
-import { TruckIcon } from "lucide-react"
+import { useParams } from "react-router-dom"
 
-import { ModuleStubPage } from "@/components/shared/ModuleStubPage"
+import { TruckDetailsPage } from "@/components/trucks/TruckDetailsPage"
+import { TruckListView } from "@/components/trucks/TruckListView"
 
+/**
+ * Trucks module shell. Both /trucks and /trucks/:id land here
+ * (routes registry → TrucksPage); the param decides list vs details.
+ */
 export function TrucksPage() {
-  return (
-    <ModuleStubPage
-      module="Camiones"
-      description="Gestión de camiones: ingreso, egreso y estados (Fase 7)."
-      icon={TruckIcon}
-    />
-  )
+  const { id } = useParams()
+  if (id) {
+    return <TruckDetailsPage truckId={id} />
+  }
+  return <TruckListView />
 }

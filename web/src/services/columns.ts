@@ -11,6 +11,9 @@
 export const TRUCK_COLUMNS =
   "id, organization_id, transport_company_id, plate, capacity_kg, status, created_at, updated_at"
 
+export const TRANSPORT_COMPANY_COLUMNS =
+  "id, organization_id, name, tax_id, contacts, status, created_at, updated_at"
+
 export const MANIFEST_COLUMNS =
   "id, organization_id, facility_id, code, truck_id, driver_id, transport_company_id, shipper_party_id, client_party_id, origin, destination, expected_weight_kg, arrival_date, departure_date, status, notes, created_by, created_at, updated_at"
 

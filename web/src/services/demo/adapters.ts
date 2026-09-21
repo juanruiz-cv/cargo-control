@@ -65,7 +65,7 @@ import type {
   StationService,
 } from "@/services/stationService"
 import type { ScaleOpInput, ScannerOpInput } from "@/services/stationService"
-import type { TruckService } from "@/services/truckService"
+import { buildTruckSignals, normalizePlate, type TruckService, type TruckSignals } from "@/services/truckService"
 import type {
   AuditLogFiltros,
   CreateMovementInput,
@@ -109,6 +109,7 @@ import type {
   ScaleOperationRow,
   SeizureOperationRow,
   StationQueueRow,
+  TransportCompanyRow,
   TruckInsert,
   TruckRow,
   TruckUpdate,
@@ -388,6 +389,35 @@ class DemoTruckService implements TruckService {
     return clone(applyLimit(rows, filtros))
   }
 
+  async contar(filtros?: TruckFiltros): Promise<number> {
+    requirePermission(this.state, "truck.read", "contar camiones")
+    let rows = this.state.trucks
+    if (filtros?.estado) rows = rows.filter((t) => t.status === filtros.estado)
+    if (filtros?.companiaId) rows = rows.filter((t) => t.transport_company_id === filtros.companiaId)
+    if (filtros?.buscar) rows = rows.filter((t) => t.plate.toLowerCase().includes(filtros.buscar!.toLowerCase()))
+    return rows.length
+  }
+
+  async listarCompanias(): Promise<TransportCompanyRow[]> {
+    requirePermission(this.state, "truck.read", "listar transportistas")
+    return clone(
+      [...this.state.companies]
+        .filter((c) => c.status === "active")
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    )
+  }
+
+  async obtenerSeñales(truckIds: string[]): Promise<TruckSignals[]> {
+    requirePermission(this.state, "truck.read", "señales de camiones")
+    if (truckIds.length === 0) return []
+    const checkpoints = this.state.locations.filter((l) => l.type === "checkpoint")
+    const scan = checkpoints.filter((l) => l.checkpoint_kind === "scan").map((l) => l.id)
+    const scale = checkpoints.filter((l) => l.checkpoint_kind === "scale").map((l) => l.id)
+    return truckIds.map((id) =>
+      buildTruckSignals(id, this.state.manifests, this.state.movements, this.state.lots, scan, scale),
+    )
+  }
+
   async obtener(id: string): Promise<TruckRow | null> {
     const truck = this.state.trucks.find((t) => t.id === id)
     return truck ? clone(truck) : null
@@ -395,14 +425,15 @@ class DemoTruckService implements TruckService {
 
   async crear(datos: TruckInsert): Promise<TruckRow> {
     requirePermission(this.state, "truck.create", "crear camión")
-    if (this.state.trucks.some((t) => t.plate === datos.plate)) {
-      throw demoError(`patente ${datos.plate} ya existe`)
+    const plate = normalizePlate(datos.plate)
+    if (this.state.trucks.some((t) => t.plate === plate)) {
+      throw demoError(`patente ${plate} ya existe`)
     }
     const truck: TruckRow = {
       id: demoId("truck"),
       organization_id: this.state.organization.id,
       transport_company_id: datos.transport_company_id ?? null,
-      plate: datos.plate,
+      plate,
       capacity_kg: datos.capacity_kg ?? null,
       status: datos.status ?? "available",
       created_at: nowIso(),
@@ -416,7 +447,15 @@ class DemoTruckService implements TruckService {
     requirePermission(this.state, "truck.update", "actualizar camión")
     const truck = this.state.trucks.find((t) => t.id === id)
     if (!truck) throw demoError(`camión ${id} no encontrado`)
-    Object.assign(truck, cambios, { updated_at: nowIso() })
+    const cambiosFinales: TruckUpdate = { ...cambios }
+    if (cambios.plate !== undefined) {
+      const plate = normalizePlate(cambios.plate)
+      if (this.state.trucks.some((t) => t.id !== id && t.plate === plate)) {
+        throw demoError(`patente ${plate} ya existe`)
+      }
+      cambiosFinales.plate = plate
+    }
+    Object.assign(truck, cambiosFinales, { updated_at: nowIso() })
     return clone(truck)
   }
 
@@ -456,9 +495,24 @@ class DemoTruckService implements TruckService {
   async registrarSalida(manifestId: string, input?: MovementExecutionInput): Promise<MovementRow> {
     requirePermission(this.state, "truck.exit", "registrar salida")
     const manifest = findManifest(this.state, manifestId)
-    if (manifest.status !== "closed") {
-      throw demoError(`el manifiesto ${manifestId} debe estar 'closed' para egresar`)
+    const movimientos = this.state.movements.filter((m) => m.manifest_id === manifestId)
+    if (!movimientos.some((m) => m.kind === "arrival")) {
+      throw demoError(`el manifiesto ${manifestId} no registró ingreso (movimiento 'arrival')`)
     }
+    if (movimientos.some((m) => m.kind === "egress")) {
+      throw demoError(`el manifiesto ${manifestId} ya egresó`)
+    }
+    // AC-E2-2 (business-rules.md §2): egress may acknowledge on-truck
+    // remnants, but never while lots are frozen (rezago/secuestro).
+    const congelados = this.state.lots.some(
+      (l) => l.manifest_id === manifestId && (l.status === "in_quarantine" || l.status === "seized"),
+    )
+    if (congelados) {
+      throw demoError(`el manifiesto ${manifestId} tiene lotes retenidos (rezago o secuestro)`)
+    }
+    const enCamion = this.state.lots.filter(
+      (l) => l.manifest_id === manifestId && l.current_truck_id === manifest.truck_id,
+    )
     const movement = createDemoMovement(this.state, {
       kind: "egress",
       manifestId,
@@ -466,12 +520,17 @@ class DemoTruckService implements TruckService {
       operatorId: input?.operatorId ?? null,
       ocurridoEn: input?.ocurridoEn,
       operationKey: input?.operationKey,
-      motivo: input?.motivo,
+      motivo: input?.motivo, // egress is a sensitive kind: reason recommended
+      payload: enCamion.length > 0 ? { acknowledged_on_truck_lots: enCamion.map((l) => l.id) } : null,
     })
     if (manifest.truck_id) {
       const truck = this.state.trucks.find((t) => t.id === manifest.truck_id)
       if (truck) truck.status = "in_route"
     }
+    // Provisional rollup mirror (flows.md Egress): with no on-truck balance
+    // the manifest closes; with a balance it stays open so the engine can
+    // reconcile the acknowledged remnant.
+    if (enCamion.length === 0) manifest.status = "closed"
     return movement
   }
 }
