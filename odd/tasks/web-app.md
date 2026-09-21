@@ -1,0 +1,114 @@
+# ODD Feature Document — web-app
+
+## Objective
+
+Build the real Cargo Control web application (not a visual prototype) inside
+this repository, using the existing documentation under `docs/` as the
+primary source of truth: React + TypeScript + Vite + Tailwind CSS +
+shadcn/ui + Lucide, with Supabase (PostgreSQL + Auth + RLS + Storage + Edge
+Functions) as the data/auth layer.
+
+## Problem being decided
+
+The doctrine declared this repository **docs-only** (README, ADR 0021/0022:
+business logic lives in Lovable host + Supabase, 4 separate repos). The
+maintainer's latest decision (today) explicitly ordered building the app
+REAL here, against this documentation. Contradiction resolved with priority
+to the most recent decision and documented in ADR 0023. Business logic
+stays decoupled from the host (Lovable independence preserved); the code
+source now also lives in this repo until the maintainer moves it.
+
+## Why
+
+The maintainer wants a working, verifiable application whose data comes
+from Supabase, with Auth, RBAC, RLS, dynamic operational map, functional
+floor-plan editor, real movements, scanner/scale/quarantine/seizure,
+audit and reports — with no mock replacing critical logic in production.
+
+## Scope
+
+- Frontend app under `web/`: Vite + React + TS + Tailwind + shadcn/ui + Lucide + Inter.
+- Database as versioned SQL migrations under `supabase/migrations/` (schema + RLS + triggers + views), source of truth for the data layer.
+- Services layer speaking Supabase via `supabase-js` with env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
+- For development only: an isolated DEMO adapter behind the same services interface, active only when env vars are absent, clearly marked DEMO, removable without touching UI/business logic. No secrets, no service-role keys in the browser, no real data in the repo (GIT-AS-5).
+- Seed/demo data ONLY for development, clearly identified as DEMO.
+- Docs updated for changes to database/security/architecture/domain/UX/business rules; ADR for important architectural decisions.
+
+## Constraints
+
+- Do NOT invent business rules that contradict the docs.
+- Do NOT change documented architecture arbitrarily.
+- Do NOT simplify business rules to save time.
+- Do NOT replace real functionality with mocks in production paths.
+- UI hides nothing that RLS does not enforce; security lives in RLS + server-side, never in button visibility.
+- Stack is fixed by documentation (no technology change without justification + documentation).
+- Data model follows `docs/architecture/database.md` (25 tables, `item_lots` as split — NOT `CargoSplit`; `layouts.version` as version — NOT `LayoutVersion`; `users` — NOT `UserProfile`).
+- Movement engine is transactional (all-or-nothing), 15 kinds, idempotent via `operation_key`.
+- Visual ≠ logistic: layout edits/publish/restore never write `movements`.
+- Brand tokens, breakpoints, and UX rules per docs/brand + docs/ux + ADR 0016/0018 (tokens `--cc-*`, Inter, density, confirmations, optimistic-list rules).
+
+## Authorized scope
+
+Explicitly authorized by maintainer: full real implementation of the web
+app in this repo, backend decoupled and connected later (SQL + code now,
+Supabase project later). Delivery: work-unit commits on `feature/web-app`
+per ADR 0021. PR/push/merge remain maintainer decisions.
+
+## Delivery strategy
+
+- `delivery_strategy`: ask-on-risk (default per ODD). Forecast far exceeds
+  400 authored changed lines → when the running count crosses ~400, ask the
+  maintainer once for the chain strategy (stacked-to-main |
+  feature-branch-chain) via lossless prompt, then cache it.
+- `per-task heuristic`: ~400 authored changed lines per task; never a hard
+  cap, never omit tests/docs to fit.
+
+## Applicable checks (per task)
+
+- `npm run build` (tsc + vite build) must pass in `web/`.
+- `npm run lint` must pass (eslint config defined in scaffolding).
+- Tests: Vitest suite; RLS/movement tests run against SQL in docs (asserted,
+  documented); run actual tests where runnable without Supabase.
+- `git ls-files` secret scan (GIT-AS-5): no `.env`, no keys tracked.
+
+## Task checklist
+
+| ID | Task | Path/route | Status |
+| -- | -- | -- | -- |
+| T1 | Document hosting contradiction & decision (ADR 0023 + DECISION LOG + README homes bump) | docs, inline | pending |
+| T2 | Scaffold `web/`: Vite + React + TS + Tailwind + shadcn/ui + Lucide + Inter; modular folders (components/pages/hooks/services/types/lib/config/integrations); env template; health page | delegated composite | pending |
+| T3 | Design system: CSS vars `--cc-*` from docs/brand (colors, typography, spacing, radii, z-index, breakpoints), base UI components (Button, Input, Select, Combobox, SearchInput, FilterBar, DataTable, Pagination, Badge, StatusBadge, Card, Dialog, Drawer, Tabs, Tooltip, Toast, Alert, ConfirmDialog, PageHeader, Breadcrumbs, EmptyState, LoadingState, ErrorState, Skeleton) | delegated | pending |
+| T4 | DB migrations: schema (25 tables, FKs, indexes, unique, triggers, enums) + RLS (default deny, 7 roles, 20 permissions) + views (occupancy, queues, dashboard) + auth trigger | delegated | pending |
+| T5 | Domain TS types + services layer (supabase-js) + DEMO adapter (same interface, dev-only) | delegated | pending |
+| T6 | Auth UI: login, logout, session persistence, password recovery, profile, protected routes, RBAC client helpers | delegated | pending |
+| T7 | Floor plan: Layout editor (canvas, grid, snap, zoom/pan, drag/resize/rotate, toolbar, properties, layers, minimap, undo/redo, version/publish) + operational map (dynamic from DB, states, filters, legend) | delegated | pending |
+| T8 | Trucks module: CRUD, states per docs, TruckList/Details/Form/Badge/Timeline, TRUCK_ENTRY/EXIT movements | delegated | pending |
+| T9 | Cargo module: manifests, items, split (item_lots), transfer flows, capacities | delegated | pending |
+| T10 | Movement engine: 15 kinds, transactional service, operation_key idempotency, guards (I1-I7), audit wiring | delegated | pending |
+| T11 | Scanner / Balanza / Rezago / Secuestro modules (queues, operations, holds, seizure workflow, attachments) | delegated | pending |
+| T12 | Dashboard: real aggregates (queries with aggregation, not full history to browser) | delegated | pending |
+| T13 | Audit module: AuditLog list/details/filters/timeline, read-only for normal users | delegated | pending |
+| T14 | Reports: truck/entries/exits/cargo/movements/occupancy/scanner/scale/quarantine/seizure/audit, filters + CSV export | delegated | pending |
+| T15 | Responsive: desktop-first, tablet (icon rail, data preserved, write path identical), breakpoints via tokens | delegated | pending |
+| T16 | SEO: public pages only (/, /login, /about, /help, /contact), robots.txt, sitemap, OG, noindex internal routes | delegated | pending |
+| T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | delegated | pending |
+| T18 | Performance: lazy loading, code splitting, pagination, debounce, memoization, aggregations, map partial updates | delegated | pending |
+| T19 | Final audit: documentation vs implementation report (senior arch/front/back/QA/UX/security), then fix findings | delegated | pending |
+
+## Progress
+
+- 2026-09-21: Env verified (Node 22, npm 11; NO Docker/pnpm/Supabase CLI).
+  Docs mapped by two read-only explorers (data/domain/security + UX/brand/QA).
+  Backend decision: code + SQL now, Supabase connected later (maintainer
+  choice). Stash `wip docs fases 16-20 pendiente` (hash recorded, recoverable)
+  preserved pre-existing uncommitted docs work. Branch `feature/web-app`
+  created from `main` (9f1ab0f). This document created before first write.
+
+## Next step
+
+T1 (ADR 0023) then T2 scaffold delegation.
+
+## Route declarations
+
+- T1: inline (single docs decision record written by orchestrator).
+- T2+: delegated direct workers (general agent) per mandatory writer trigger.
