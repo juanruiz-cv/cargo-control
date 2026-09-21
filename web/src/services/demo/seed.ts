@@ -153,6 +153,12 @@ export interface DemoState {
   users: UserRow[]
   /** Active demo session role — the adapters enforce it like RLS would. */
   role: RoleCode
+  /**
+   * Demo credential store: starts as DEMO_PASSWORD; resetting the password
+   * (simulated recovery) updates this, so the next login validates against
+   * the new value. Killed on reload with the whole in-memory store.
+   */
+  demoPassword: string
   manifests: CargoManifestRow[]
   items: CargoItemRow[]
   lots: ItemLotRow[]
@@ -781,6 +787,7 @@ export function createDemoState(): DemoState {
     parties,
     users,
     role: "admin",
+    demoPassword: DEMO_PASSWORD,
     manifests,
     items,
     lots,

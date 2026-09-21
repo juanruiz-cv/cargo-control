@@ -1,16 +1,14 @@
-import { useLocation, Link } from "react-router-dom"
+import { useLocation } from "react-router-dom"
 import {
   MenuIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
-  UserRoundIcon,
 } from "lucide-react"
 
 import { ROUTES, NAV_GROUPS } from "@/config/routes"
 import { Breadcrumbs, type BreadcrumbItemData } from "@/components/shared/Breadcrumbs"
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { cn } from "@/lib/utils"
+import { UserMenu } from "@/components/layout/UserMenu"
 
 interface HeaderProps {
   collapsed: boolean
@@ -72,20 +70,7 @@ export function Header({
         <Breadcrumbs items={breadcrumb} />
       </div>
 
-      <Tooltip>
-        <TooltipTrigger>
-          <Button
-            variant="ghost"
-            size="icon"
-            render={<Link to={ROUTES.login} />}
-            className={cn(collapsed && "hidden")}
-            aria-label="Iniciar sesión"
-          >
-            <UserRoundIcon />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Iniciar sesión · fase Auth</TooltipContent>
-      </Tooltip>
+      <UserMenu />
     </header>
   )
 }

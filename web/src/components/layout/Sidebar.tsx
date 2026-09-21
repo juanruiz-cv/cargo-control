@@ -1,8 +1,9 @@
 import { NavLink } from "react-router-dom"
 import { BoxesIcon } from "lucide-react"
 
-import { NAV_GROUPS, type NavItem } from "@/config/routes"
+import { NAV_GROUPS, ROUTES, type NavItem } from "@/config/routes"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useAuth } from "@/integrations/auth/useAuth"
 import { cn } from "@/lib/utils"
 
 interface SidebarProps {
@@ -17,8 +18,19 @@ interface SidebarProps {
  * - Active module: filled pill + icon + label (never color alone).
  * - Collapsible to an icon rail (local preference, optimistic-safe).
  * - Mobile: off-canvas overlay, Esc closes (handled by AppShell).
+ * - Navigation items are filtered by route permission (authentication.md
+ *   §6 guard table) — UX only, RLS stays the authority.
  */
 export function Sidebar({ collapsed, mobileOpen, onCloseMobile }: SidebarProps) {
+  const { hasPermission } = useAuth()
+
+  const groups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter(
+      (item) => !item.permission || hasPermission(item.permission),
+    ),
+  })).filter((group) => group.items.length > 0)
+
   return (
     <>
       {mobileOpen ? (
@@ -46,7 +58,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile }: SidebarProps) 
           )}
         >
           <NavLink
-            to="/dashboard"
+            to={ROUTES.dashboard}
             className="flex items-center gap-2 overflow-hidden"
             aria-label="Cargo Control"
           >
@@ -65,30 +77,36 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile }: SidebarProps) 
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-3">
-          <ul className="space-y-4">
-            {NAV_GROUPS.map((group) => (
-              <li key={group.label}>
-                <p
-                  className={cn(
-                    "px-2 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase",
-                    collapsed && "sr-only",
-                  )}
-                >
-                  {group.label}
-                </p>
-                <ul className="space-y-0.5">
-                  {group.items.map((item) => (
-                    <SidebarNavItem
-                      key={item.path}
-                      item={item}
-                      collapsed={collapsed}
-                      onNavigate={onCloseMobile}
-                    />
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
+          {groups.length ? (
+            <ul className="space-y-4">
+              {groups.map((group) => (
+                <li key={group.label}>
+                  <p
+                    className={cn(
+                      "px-2 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase",
+                      collapsed && "sr-only",
+                    )}
+                  >
+                    {group.label}
+                  </p>
+                  <ul className="space-y-0.5">
+                    {group.items.map((item) => (
+                      <SidebarNavItem
+                        key={item.path}
+                        item={item}
+                        collapsed={collapsed}
+                        onNavigate={onCloseMobile}
+                      />
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="px-2 py-4 text-sm text-muted-foreground">
+              Sin secciones habilitadas para tu cuenta.
+            </p>
+          )}
         </nav>
       </aside>
     </>

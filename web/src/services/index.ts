@@ -36,6 +36,8 @@ import type { TruckService } from "@/services/truckService"
 import { SupabaseTruckService } from "@/services/truckService"
 
 export interface Services {
+  /** Adapter mode: "supabase" (RLS-enforced) or "demo" (dev only). */
+  mode: "supabase" | "demo"
   auth: AuthService
   trucks: TruckService
   cargo: CargoService
@@ -49,6 +51,7 @@ export interface Services {
 
 export function createSupabaseServices(client: SupabaseClient): Services {
   return {
+    mode: "supabase",
     auth: new SupabaseAuthService(client),
     trucks: new SupabaseTruckService(client),
     cargo: new SupabaseCargoService(client),

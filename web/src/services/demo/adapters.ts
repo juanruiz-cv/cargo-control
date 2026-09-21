@@ -8,8 +8,11 @@
 // Supabase backend.
 //
 // Behavioral notes:
-//   - The demo session starts SIGNED-IN as demo@cargocontrol.local
-//     (role configurable via options.role, default 'admin').
+//   - The demo session starts SIGNED-OUT (like production). The AuthProvider
+//     restores a previous demo session from localStorage (cc.auth.demo-session)
+//     to simulate persistence; otherwise the login screen offers a DEMO
+//     button that signs in as demo@cargocontrol.local (role configurable via
+//     options.role, default 'admin').
 //   - Movement execution is fully in-memory INCLUDING splits (the
 //     deferred-Σ trigger that blocks REST splits is a database concern).
 //   - Hold resolution is implemented (the DB blocks it via RLS UPDATE
@@ -39,6 +42,7 @@ import type {
   LoginResult,
   SesionInfo,
 } from "@/services/authService"
+import { PERMISSION_CODES } from "@/services/permissionCatalog"
 import type {
   ScaleStationService,
   ScannerStationService,
@@ -62,7 +66,6 @@ import type {
 import type { LocationFiltros } from "@/services/shared"
 import {
   DEMO_EMAIL,
-  DEMO_PASSWORD,
   createDemoState,
   hasPermission,
   type DemoState,
@@ -222,7 +225,9 @@ class DemoAuthService implements AuthService {
 
   constructor(state: DemoState) {
     this.state = state
-    this.sessionUser = state.users.find((u) => u.email === DEMO_EMAIL) ?? null
+    // Starts signed-out; the AuthProvider decides whether to auto-restore a
+    // persisted demo session (localStorage) — not this adapter.
+    this.sessionUser = null
   }
 
   private toSesionInfo(): SesionInfo {
@@ -236,8 +241,8 @@ class DemoAuthService implements AuthService {
 
   async iniciarSesion(email: string, password: string): Promise<LoginResult> {
     const user = this.state.users.find((u) => u.email === email)
-    if (!user || password !== DEMO_PASSWORD) {
-      throw demoError(`credenciales inválidas (use ${DEMO_EMAIL} / ${DEMO_PASSWORD})`)
+    if (!user || password !== this.state.demoPassword) {
+      throw demoError(`credenciales inválidas (use ${DEMO_EMAIL} / ${this.state.demoPassword})`)
     }
     // The operator account demos a restricted role; demo@ keeps the
     // configured demo role (options.role).
@@ -258,8 +263,26 @@ class DemoAuthService implements AuthService {
     // DEMO: no email provider wired; the UI just shows the confirmation.
   }
 
+  async verificarTokenRecuperacion(_tokenHash: string): Promise<void> {
+    // DEMO: recovery links are simulated; the reset screen works with an
+    // active session (or without one, mimicking the mail-less flow).
+  }
+
   async perfilActual(): Promise<UserRow | null> {
     return this.sessionUser ? clone(this.sessionUser) : null
+  }
+
+  async permisosActuales(): Promise<PermissionCode[]> {
+    if (!this.sessionUser) return []
+    return PERMISSION_CODES.filter((code) => hasPermission(this.state.role, code))
+  }
+
+  async rolesActuales(): Promise<RoleCode[]> {
+    return this.sessionUser ? [this.state.role] : []
+  }
+
+  async actualizarPassword(nuevaPassword: string): Promise<void> {
+    this.state.demoPassword = nuevaPassword
   }
 }
 
@@ -1245,6 +1268,8 @@ class DemoDashboardService implements DashboardService {
 // ---------------------------------------------------------------------
 
 export interface DemoServices {
+  /** Active adapter mode — lets the shell label/locks DEMO-only affordances. */
+  mode: "demo"
   auth: AuthService
   trucks: TruckService
   cargo: CargoService
@@ -1262,6 +1287,7 @@ export function createDemoServices(options: DemoServiceOptions = {}): DemoServic
 
   const movements = new DemoMovementService(state)
   return {
+    mode: "demo",
     auth: new DemoAuthService(state),
     trucks: new DemoTruckService(state),
     cargo: new DemoCargoService(state, movements),
