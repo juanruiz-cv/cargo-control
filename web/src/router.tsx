@@ -21,6 +21,8 @@ import { ScalePage } from "@/pages/ScalePage"
 import { ScannerPage } from "@/pages/ScannerPage"
 import { SeizurePage } from "@/pages/SeizurePage"
 import { SettingsPage } from "@/pages/SettingsPage"
+import { LayoutsPage } from "@/pages/settings/LayoutsPage"
+import { LayoutEditorPage } from "@/pages/settings/LayoutEditorPage"
 import { TrucksPage } from "@/pages/TrucksPage"
 import { WarehousePage } from "@/pages/WarehousePage"
 
@@ -134,6 +136,14 @@ export const router = createBrowserRouter([
         element: withModulePermission({ route: ROUTES.audit, children: <AuditPage /> }),
       },
       { path: ROUTES.settings, element: <SettingsPage /> },
+      {
+        path: ROUTES.layouts,
+        element: withModulePermission({ route: ROUTES.layouts, children: <LayoutsPage /> }),
+      },
+      {
+        path: ROUTES.layoutEditor,
+        element: withModulePermission({ route: ROUTES.layoutEditor, children: <LayoutEditorPage /> }),
+      },
       { path: ROUTES.notFound, element: <NotFoundPage /> },
     ],
   },

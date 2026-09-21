@@ -58,3 +58,9 @@ export const STATION_QUEUE_COLUMNS =
 
 export const HOLD_OPEN_COLUMNS =
   "hold_type, operation_id, organization_id, item_lot_id, status, reason, legal_ref, opened_by, opened_at, resolution_note, manifest_id, cargo_item_id, current_location_id, current_truck_id, lot_status, quantity, uom, sku, item_description, manifest_code"
+
+export const LAYOUT_COLUMNS =
+  "id, organization_id, facility_id, name, version, status, created_by, description, changes, scale, background, created_at, updated_at"
+
+export const LAYOUT_ELEMENT_COLUMNS =
+  "id, layout_id, location_id, element_type, code, name, description, x, y, visual_width, visual_height, rotation, color, icon, z_index, label, is_locked, is_visible, created_at, updated_at"

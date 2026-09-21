@@ -35,6 +35,20 @@ import type {
 import type { QuarantineOpenInput, SeizureOpenInput, HoldResolveInput } from "@/services/holdService"
 import type { QuarantineHoldService, SeizureHoldService } from "@/services/holdService"
 import type { LocationService } from "@/services/locationService"
+import {
+  PLACE_LOCATION,
+  TIPO_CODIGO_PREFIJO,
+  TIPOS_LUGAR,
+  type CambiosLayout,
+  type CrearElementoInput,
+  type CrearVersionInput,
+  type EliminarElementoResultado,
+  type GuardarBorradorInput,
+  type LayoutConElementos,
+  type LayoutService,
+  type LayoutVersionRow,
+  type MapaOperativoResultado,
+} from "@/services/layoutService"
 import { MOVEMENT_KIND_PERMISSION, type MovementService } from "@/services/movementService"
 import type { MovementDetail } from "@/services/movementService"
 import type {
@@ -63,7 +77,7 @@ import type {
   SeizureHoldFiltros,
   TruckFiltros,
 } from "@/services/shared"
-import type { LocationFiltros } from "@/services/shared"
+import type { LocationFiltros, LayoutFiltros } from "@/services/shared"
 import {
   DEMO_EMAIL,
   createDemoState,
@@ -78,6 +92,9 @@ import type {
   CapacityUpdate,
   DashboardMetricsRow,
   ItemLotRow,
+  Json,
+  LayoutElementRow,
+  LayoutRow,
   LocationOccupancyRow,
   LocationRow,
   ManifestInsert,
@@ -1264,6 +1281,368 @@ class DemoDashboardService implements DashboardService {
 }
 
 // ---------------------------------------------------------------------
+// Floor plans (Fase 4/14, ADR 0005/0015)
+//
+// Mirrors the Supabase client semantics 1:1, including the RLS-shaped
+// constraints: no physical deletes (elements soft-hide via is_visible),
+// draft-only edits, publish archives the previous published version of the
+// same (facility, name), and audit rows are appended (server-side engine
+// in production; in-memory here so the UI exercises the flow).
+// ---------------------------------------------------------------------
+
+class DemoLayoutService implements LayoutService {
+  private readonly state: DemoState
+  private readonly locations: DemoLocationService
+
+  constructor(state: DemoState) {
+    this.state = state
+    this.locations = new DemoLocationService(state)
+  }
+
+  private conCreador(layout: LayoutRow): LayoutVersionRow {
+    const creador = this.state.users.find((u) => u.id === layout.created_by)
+    return { ...layout, creador_nombre: creador?.full_name ?? null }
+  }
+
+  private elementosVisibles(layoutId: string): LayoutElementRow[] {
+    return this.state.layoutElements
+      .filter((e) => e.layout_id === layoutId && e.is_visible)
+      .sort((a, b) => a.z_index - b.z_index || a.id.localeCompare(b.id))
+  }
+
+  private proximoCodigo(elementType: LayoutElementRow["element_type"]): string {
+    const prefijo = TIPO_CODIGO_PREFIJO[elementType]
+    let max = 0
+    for (const l of this.state.locations) {
+      const match = /^[A-Z]+-(\d+)$/.exec(l.code)
+      if (match) max = Math.max(max, Number.parseInt(match[1], 10))
+    }
+    return `${prefijo}-${String(max + 1).padStart(3, "0")}`
+  }
+
+  async listarVersiones(filtros?: LayoutFiltros): Promise<LayoutVersionRow[]> {
+    requirePermission(this.state, "warehouse.read", "listar versiones de layouts")
+    let rows = this.state.layouts
+    if (filtros?.facilidadId) rows = rows.filter((l) => l.facility_id === filtros.facilidadId)
+    if (filtros?.nombre) rows = rows.filter((l) => l.name === filtros.nombre)
+    if (filtros?.estado) rows = rows.filter((l) => l.status === filtros.estado)
+    const ordenadas = [...rows].sort(
+      (a, b) => a.name.localeCompare(b.name) || b.version - a.version,
+    )
+    return clone(applyLimit(ordenadas.map((l) => this.conCreador(l)), filtros))
+  }
+
+  async obtenerLayout(id: string): Promise<LayoutVersionRow | null> {
+    requirePermission(this.state, "warehouse.read", "obtener layout")
+    const row = this.state.layouts.find((l) => l.id === id)
+    return row ? clone(this.conCreador(row)) : null
+  }
+
+  async obtenerLayoutConElementos(id: string): Promise<LayoutConElementos | null> {
+    const layout = await this.obtenerLayout(id)
+    if (!layout) return null
+    return { layout, elementos: clone(this.elementosVisibles(id)) }
+  }
+
+  async obtenerLayoutPublicado(facilidadId: string): Promise<LayoutConElementos | null> {
+    requirePermission(this.state, "warehouse.read", "obtener layout publicado")
+    const publicado = [...this.state.layouts]
+      .filter((l) => l.facility_id === facilidadId && l.status === "published")
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]
+    if (!publicado) return null
+    return { layout: clone(publicado), elementos: clone(this.elementosVisibles(publicado.id)) }
+  }
+
+  async obtenerMapaOperativo(facilidadId: string): Promise<MapaOperativoResultado | null> {
+    const publicado = await this.obtenerLayoutPublicado(facilidadId)
+    if (!publicado) return null
+    const [ubicaciones, ocupacion] = await Promise.all([
+      this.locations.listarLocations({ facilidadId }),
+      this.locations.obtenerOcupacion(facilidadId),
+    ])
+    const locById = new Map(ubicaciones.map((l) => [l.id, l]))
+    const occByLoc = new Map(ocupacion.map((o) => [o.location_id, o]))
+    return {
+      layout: publicado.layout,
+      elementos: publicado.elementos.map((elemento) => ({
+        elemento,
+        ubicacion: elemento.location_id ? locById.get(elemento.location_id) ?? null : null,
+        ocupacion: elemento.location_id ? occByLoc.get(elemento.location_id) ?? null : null,
+      })),
+    }
+  }
+
+  async ubicacionesConHoldAbierto(_facilidadId: string): Promise<string[]> {
+    requirePermission(this.state, "warehouse.read", "consultar holds abiertos del mapa")
+    return Array.from(
+      new Set(
+        this.state.lots
+          .filter((l) => l.status === "in_quarantine" || l.status === "seized")
+          .map((l) => l.current_location_id)
+          .filter((id): id is string => id !== null),
+      ),
+    )
+  }
+
+  async crearVersion(input: CrearVersionInput): Promise<LayoutConElementos> {
+    requirePermission(this.state, "warehouse.configure", "crear versión de layout")
+    const versiones = this.state.layouts.filter(
+      (l) => l.facility_id === input.facilityId && l.name === input.name,
+    )
+    const version = versiones.reduce((max, l) => Math.max(max, l.version), 0) + 1
+    const layout: LayoutRow = {
+      id: demoId("lay"),
+      organization_id: this.state.organization.id,
+      facility_id: input.facilityId,
+      name: input.name,
+      version,
+      status: "draft",
+      created_by: input.actorId ?? null,
+      description: input.description ?? null,
+      changes: null,
+      scale: 20,
+      background: { grid: true, gridSize: 20, color: null } as Json,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    }
+    this.state.layouts.push(layout)
+
+    let elementos: LayoutElementRow[] = []
+    if (input.baseVersionId) {
+      for (const e of this.elementosVisibles(input.baseVersionId)) {
+        this.state.layoutElements.push({
+          ...e,
+          id: `layel-${this.state.nextElementId++}`,
+          layout_id: layout.id,
+          created_at: nowIso(),
+          updated_at: nowIso(),
+        })
+      }
+      elementos = this.elementosVisibles(layout.id)
+    }
+
+    appendAudit(this.state, {
+      actor_id: input.actorId ?? this.state.users[0]?.id ?? null,
+      action: "layout.create",
+      entity_type: "layout",
+      entity_id: layout.id,
+      before: null,
+      after: { name: layout.name, version: layout.version, status: "draft" },
+      reason: input.description ?? null,
+      metadata: null,
+    })
+    return { layout: clone(layout), elementos: clone(elementos) }
+  }
+
+  async guardarBorrador(input: GuardarBorradorInput): Promise<LayoutConElementos> {
+    requirePermission(this.state, "warehouse.configure", "guardar borrador de layout")
+    const layout = this.state.layouts.find((l) => l.id === input.layoutId)
+    if (!layout) throw demoError(`layout ${input.layoutId} no existe`)
+    if (layout.status !== "draft") throw demoError(`solo borradores se guardan (${layout.status})`)
+
+    if (input.description !== undefined) layout.description = input.description
+    if (input.escala !== undefined) layout.scale = input.escala
+    if (input.background !== undefined) layout.background = input.background
+    layout.updated_at = nowIso()
+
+    const drafts = (input.elementos ?? []).map((e) => ({
+      ...e,
+      rotation: e.rotation ?? 0,
+      z_index: e.z_index ?? 0,
+      is_visible: e.is_visible ?? true,
+    }))
+
+    for (const draft of drafts) {
+      if (draft.id) {
+        const existing = this.state.layoutElements.find(
+          (el) => el.id === draft.id && el.layout_id === input.layoutId,
+        )
+        if (existing) {
+          Object.assign(existing, draft, { layout_id: input.layoutId, updated_at: nowIso() })
+        } else {
+          this.state.layoutElements.push({
+            ...(draft as LayoutElementRow),
+            id: draft.id,
+            layout_id: input.layoutId,
+            created_at: nowIso(),
+            updated_at: nowIso(),
+          })
+        }
+      } else {
+        this.state.layoutElements.push({
+          ...(draft as LayoutElementRow),
+          id: `layel-${this.state.nextElementId++}`,
+          layout_id: input.layoutId,
+          created_at: nowIso(),
+          updated_at: nowIso(),
+        })
+      }
+    }
+
+    const incomingIds = new Set(drafts.filter((d) => d.id).map((d) => d.id as string))
+    for (const el of this.state.layoutElements) {
+      if (
+        el.layout_id === input.layoutId &&
+        el.is_visible &&
+        el.id !== undefined &&
+        !incomingIds.has(el.id)
+      ) {
+        el.is_visible = false
+        el.updated_at = nowIso()
+      }
+    }
+
+    return { layout: clone(layout), elementos: clone(this.elementosVisibles(input.layoutId)) }
+  }
+
+  async publicarVersion(
+    layoutId: string,
+    cambios?: CambiosLayout | null,
+    actorId?: string,
+  ): Promise<LayoutVersionRow> {
+    requirePermission(this.state, "warehouse.configure", "publicar versión de layout")
+    const layout = this.state.layouts.find((l) => l.id === layoutId)
+    if (!layout) throw demoError(`layout ${layoutId} no existe`)
+    if (layout.status !== "draft") throw demoError(`solo versiones borrador se publican (${layout.status})`)
+
+    for (const other of this.state.layouts) {
+      if (
+        other.facility_id === layout.facility_id &&
+        other.name === layout.name &&
+        other.status === "published" &&
+        other.id !== layout.id
+      ) {
+        other.status = "archived"
+        other.updated_at = nowIso()
+      }
+    }
+    layout.status = "published"
+    layout.changes = (cambios ?? layout.changes) as Json
+    layout.updated_at = nowIso()
+
+    appendAudit(this.state, {
+      actor_id: actorId ?? this.state.users[0]?.id ?? null,
+      action: "layout.publish",
+      entity_type: "layout",
+      entity_id: layout.id,
+      before: { status: "draft" },
+      after: { name: layout.name, version: layout.version, status: "published" },
+      reason: null,
+      metadata: null,
+    })
+    return clone(this.conCreador(layout))
+  }
+
+  async restaurarVersion(layoutId: string, actorId?: string): Promise<LayoutConElementos> {
+    requirePermission(this.state, "warehouse.configure", "restaurar versión de layout")
+    const source = this.state.layouts.find((l) => l.id === layoutId)
+    if (!source) throw demoError(`layout ${layoutId} no existe`)
+
+    const version = await this.crearVersion({
+      facilityId: source.facility_id,
+      name: source.name,
+      description: `Restaurado desde versión ${source.version}`,
+      baseVersionId: source.id,
+      actorId,
+    })
+    const created = this.state.layouts.find((l) => l.id === version.layout.id)!
+    appendAudit(this.state, {
+      actor_id: actorId ?? this.state.users[0]?.id ?? null,
+      action: "layout.restore",
+      entity_type: "layout",
+      entity_id: created.id,
+      before: null,
+      after: { name: created.name, version: created.version, status: "draft", restored_from: source.version },
+      reason: `Restaurado desde versión ${source.version}`,
+      metadata: null,
+    })
+    return version
+  }
+
+  async crearElemento(input: CrearElementoInput): Promise<LayoutElementRow> {
+    requirePermission(this.state, "warehouse.configure", "crear elemento de layout")
+    const esLugar = TIPOS_LUGAR.has(input.elementType)
+
+    const layout = this.state.layouts.find((l) => l.id === input.layoutId)
+    if (!layout) throw demoError(`layout ${input.layoutId} no existe`)
+
+    let locationId: string | null = null
+    if (esLugar) {
+      const shape = PLACE_LOCATION[input.elementType]
+      const codigo = this.proximoCodigo(input.elementType)
+      const location: LocationRow = {
+        id: demoId("loc"),
+        organization_id: this.state.organization.id,
+        facility_id: layout.facility_id,
+        parent_id: null,
+        type: shape.type,
+        checkpoint_kind: shape.checkpoint_kind,
+        code: codigo,
+        name: codigo,
+        physical_width: null,
+        physical_height: null,
+        physical_depth: null,
+        physical_unit: "m",
+        capacity_max_units: null,
+        capacity_max_kg: null,
+        capacity_max_volume_m3: null,
+        allows_hold: shape.allows_hold,
+        requires_authorization: false,
+        notes: null,
+        active: true,
+        maintenance: false,
+        created_at: nowIso(),
+        updated_at: nowIso(),
+      }
+      this.state.locations.push(location)
+      locationId = location.id
+    }
+
+    const elemento: LayoutElementRow = {
+      id: `layel-${this.state.nextElementId++}`,
+      layout_id: input.layoutId,
+      location_id: locationId,
+      element_type: input.elementType,
+      code: null,
+      name: esLugar ? null : input.name ?? null,
+      description: null,
+      x: input.x,
+      y: input.y,
+      visual_width: input.visualWidth,
+      visual_height: input.visualHeight,
+      rotation: 0,
+      color: input.color ?? null,
+      icon: input.icon ?? null,
+      z_index: input.zIndex ?? 0,
+      label: input.label ?? null,
+      is_locked: false,
+      is_visible: true,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    }
+    this.state.layoutElements.push(elemento)
+    return clone(elemento)
+  }
+
+  async eliminarElemento(layoutId: string, elementId: string): Promise<EliminarElementoResultado> {
+    requirePermission(this.state, "warehouse.configure", "eliminar elemento de layout")
+    const elemento = this.state.layoutElements.find(
+      (el) => el.id === elementId && el.layout_id === layoutId,
+    )
+    if (!elemento) return { elementoBorrado: false }
+
+    elemento.is_visible = false
+    elemento.updated_at = nowIso()
+    return {
+      elementoBorrado: true,
+      aviso: elemento.location_id
+        ? "El elemento se ocultó del plano; la ubicación y su historial se conservan (sin borrado físico por RLS)."
+        : undefined,
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------
 
@@ -1279,6 +1658,7 @@ export interface DemoServices {
   holds: HoldService
   audit: AuditService
   dashboard: DashboardService
+  layouts: LayoutService
 }
 
 export function createDemoServices(options: DemoServiceOptions = {}): DemoServices {
@@ -1297,5 +1677,6 @@ export function createDemoServices(options: DemoServiceOptions = {}): DemoServic
     holds: new DemoHoldService(state),
     audit: new DemoAuditService(state),
     dashboard: new DemoDashboardService(state),
+    layouts: new DemoLayoutService(state),
   }
 }

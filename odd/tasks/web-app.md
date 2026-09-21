@@ -78,10 +78,10 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T1 | Document hosting contradiction & decision (ADR 0023 + odd mirror) | docs, inline | done (1427ae0) |
 | T2 | Scaffold `web/`: Vite + React + TS + Tailwind + shadcn/ui + Lucide + Inter; modular folders (components/pages/hooks/services/types/lib/config/integrations); env template; health page | delegated composite | done (ade14b9, build+lint+spot OK, risk medium, verified) |
 | T3 | Design system: CSS vars `--cc-*` (colors, typography, spacing, radii, z-index, breakpoints) + base UI components | delegated | partial — tokens + 18 primitivas en T2; faltan SearchInput/FilterBar/Combobox/DataTable/StatusBadge (se completan en fases de módulos) |
-| T3 | Design system: CSS vars `--cc-*` from docs/brand (colors, typography, spacing, radii, z-index, breakpoints), base UI components (Button, Input, Select, Combobox, SearchInput, FilterBar, DataTable, Pagination, Badge, StatusBadge, Card, Dialog, Drawer, Tabs, Tooltip, Toast, Alert, ConfirmDialog, PageHeader, Breadcrumbs, EmptyState, LoadingState, ErrorState, Skeleton) | delegated | pending |
+| T3 | Design system: CSS vars `--cc-*` from docs/brand (colors, typography, spacing, radii, z-index, breakpoints), base UI components (Button, Input, Select, Combobox, SearchInput, FilterBar, DataTable, Pagination, Badge, StatusBadge, Card, Dialog, Drawer, Tabs, Tooltip, Toast, Alert, ConfirmDialog, PageHeader, Breadcrumbs, EmptyState, LoadingState, ErrorState, Skeleton) | delegated | partial — tokens + 18 primitivas en T2; faltan SearchInput/FilterBar/Combobox/DataTable/StatusBadge (se completan en fases de módulos) |
 | T4 | DB migrations: schema (25 tables, FKs, indexes, unique, triggers, enums) + RLS (default deny, 7 roles, 20 permissions) + views (occupancy, queues, dashboard) + auth trigger | delegated | done (54e0267; 25 tablas, 66 políticas, 9 views security_invoker, 15+3 triggers; static-verified — sin motor SQL local; risk medium, spot OK) |
 | T5 | Domain TS types + services layer (supabase-js) + DEMO adapter (same interface, dev-only) | delegated | done (d070b4b; enums TS=CHECKs exactos spot-checked, services por módulo, factory selectora supabase/demo con warn; risk medium; build+lint pass) |
-| T6 | Auth UI: login, logout, session persistence, password recovery, profile, protected routes, RBAC client helpers | delegated | pending |
+| T6 | Auth UI: login, logout, session persistence, password recovery, profile, protected routes, RBAC client helpers | delegated | done (7f29d08; LoginPage real+botón demo, AuthProvider+useAuth, RequireAuth/RequirePermission con returnTo, sidebar filtrado, /403, forgot+reset perfil read-only; mapa permisos verificado = authentication.md §Guard table; risk medium; build+lint+tsc pass) |
 | T7 | Floor plan: Layout editor (canvas, grid, snap, zoom/pan, drag/resize/rotate, toolbar, properties, layers, minimap, undo/redo, version/publish) + operational map (dynamic from DB, states, filters, legend) | delegated | pending |
 | T8 | Trucks module: CRUD, states per docs, TruckList/Details/Form/Badge/Timeline, TRUCK_ENTRY/EXIT movements | delegated | pending |
 | T9 | Cargo module: manifests, items, split (item_lots), transfer flows, capacities | delegated | pending |
@@ -110,10 +110,25 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   T2 (tokens --cc-* fieles a docs/brand, 18 primitivas ui + shared/layout).
   Aviso: lint usa oxlint (create-vite 9 ya no trae ESLint) — convención del
   scaffold. Rutas especiales según routes-and-components.md (canónico).
+- T4 done (commit 54e0267): supabase/migrations 0001-0006 — 25 tablas, 7
+  roles/20 permisos/77 role_permission, 66 políticas RLS, 9 views
+  security_invoker + day_bucket, 15 updated_at + 3 ADR 0006 guards + ADR 0003
+  Σ deferrable; static-verified (sin motor SQL local); risk medium, spot OK.
+- T5 done (commit d070b4b): web/src/types (enums=CHECKs exactos) +
+  web/src/services (9 servicios módulo, impl supabase + adapter DEMO
+  dev-only + factory selectora). splitItem/resolve requieren engine
+  server-side (no REST) — documentado en servicios.
+- T6 done (commit 7f29d08): Auth UI (LoginPage real + botón demo,
+  AuthProvider/useAuth, RequireAuth/RequirePermission, sidebar filtrado,
+  /403, forgot+reset, perfil read-only); mapa permisos verificado contra
+  authentication.md §Guard table.
 
 ## Next step
 
-T4 — DB migrations (schema + RLS + triggers + views) según database.md/rls.md/authorization.md/domain. Delegar a writer con docs como spec.
+T7 — Floor plan: layout editor + operational map
+(docs/architecture/floor-plan-editor.md, floor-plan-versioning.md,
+operational-map.md + domain/entities.md + brand/ux). Delegar a writer con
+docs como spec.
 
 ## Route declarations
 

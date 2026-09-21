@@ -28,6 +28,8 @@ import type { HoldService } from "@/services/holdService"
 import { SupabaseHoldService } from "@/services/holdService"
 import type { LocationService } from "@/services/locationService"
 import { SupabaseLocationService } from "@/services/locationService"
+import type { LayoutService } from "@/services/layoutService"
+import { SupabaseLayoutService } from "@/services/layoutService"
 import type { MovementService } from "@/services/movementService"
 import { SupabaseMovementService } from "@/services/movementService"
 import type { StationService } from "@/services/stationService"
@@ -47,6 +49,7 @@ export interface Services {
   holds: HoldService
   audit: AuditService
   dashboard: DashboardService
+  layouts: LayoutService
 }
 
 export function createSupabaseServices(client: SupabaseClient): Services {
@@ -61,6 +64,7 @@ export function createSupabaseServices(client: SupabaseClient): Services {
     holds: new SupabaseHoldService(client),
     audit: new SupabaseAuditService(client),
     dashboard: new SupabaseDashboardService(client),
+    layouts: new SupabaseLayoutService(client),
   }
 }
 

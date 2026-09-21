@@ -4,6 +4,7 @@ import {
   ArrowRightLeftIcon,
   ClipboardListIcon,
   FileBarChartIcon,
+  LayersIcon,
   LayoutDashboardIcon,
   MapIcon,
   ScaleIcon,
@@ -49,6 +50,8 @@ export const ROUTES = {
   reports: "/reports",
   audit: "/audit",
   settings: "/settings",
+  layouts: "/settings/layouts",
+  layoutEditor: "/settings/layouts/:id/edit",
   notFound: "*",
 } as const
 
@@ -73,6 +76,11 @@ export const ROUTES = {
  * - /settings → any authenticated session (own profile); the doc gates
  *   `/settings/users` + RBAC screens with `has_role('admin')`, which the
  *   future admin screens will enforce individually inside the page.
+ * - /settings/layouts (+ editor) → warehouse.read for browsing/viewing;
+ *   writing (crear/publicar/restaurar/guardar) is gated INSIDE the pages
+ *   with warehouse.configure (RLS: layouts INSERT/UPDATE). floor-plan
+ *   versioning.md declares /planta; Fase 4/14 + the existing Settings
+ *   flat-page shell win (documented tension, resolved at implementation).
  */
 export const ROUTE_PERMISSIONS: Record<string, PermissionCode | undefined> = {
   [ROUTES.map]: "warehouse.read",
@@ -86,6 +94,8 @@ export const ROUTE_PERMISSIONS: Record<string, PermissionCode | undefined> = {
   [ROUTES.movements]: "cargo.read",
   [ROUTES.reports]: "warehouse.read",
   [ROUTES.audit]: "audit.read",
+  [ROUTES.layouts]: "warehouse.read",
+  [ROUTES.layoutEditor]: "warehouse.read",
 }
 
 export interface NavItem {
@@ -190,6 +200,13 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: ArchiveIcon,
         keyshortcut: "Alt+Shift+7",
         permission: ROUTE_PERMISSIONS[ROUTES.audit],
+      },
+      {
+        label: "Planos",
+        path: ROUTES.layouts,
+        icon: LayersIcon,
+        keyshortcut: "Alt+Shift+9",
+        permission: ROUTE_PERMISSIONS[ROUTES.layouts],
       },
       {
         label: "Configuración",

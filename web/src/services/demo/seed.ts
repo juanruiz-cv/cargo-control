@@ -27,6 +27,10 @@ import type {
   DriverRow,
   FacilityRow,
   ItemLotRow,
+  Json,
+  LayoutElementRow,
+  LayoutElementType,
+  LayoutRow,
   LocationRow,
   MovementItemRow,
   MovementRow,
@@ -169,13 +173,205 @@ export interface DemoState {
   quarantineOps: QuarantineOperationRow[]
   seizureOps: SeizureOperationRow[]
   auditLog: AuditLogRow[]
+  /** Floor-plan versions + elements (Fase 4/14, ADR 0015). */
+  layouts: LayoutRow[]
+  layoutElements: LayoutElementRow[]
   /** Monotonic counters for ids the demo creates at runtime. */
   nextMovementId: number
   nextMovementItemId: number
   nextOpId: number
+  nextElementId: number
 }
 
 const CREATED_AT = "2026-09-18T06:00:00.000Z"
+
+// ---------------------------------------------------------------------
+// Floor-plan seed (Fase 4/14, ADR 0005/0015)
+//
+// "Planta Principal": v1 PUBLISHED (the map renders it) + v2 DRAFT (the
+// editor opens it; publishing v2 archives v1). Every place element links
+// the location whose type matches the ADR 0005 mapping (warehouse→zone,
+// scanner→checkpoint 'scan', ...); corridor/door/other are visual-only.
+// Coordinates are document pixels at scale 20 px/m (galpón ≈ 22 m × 15 m).
+// ---------------------------------------------------------------------
+
+const LAYOUT_CREATED = "2026-09-18T08:00:00.000Z"
+
+function element(
+  id: string,
+  layoutId: string,
+  elementType: LayoutElementType,
+  locationId: string | null,
+  x: number,
+  y: number,
+  visualWidth: number,
+  visualHeight: number,
+  overrides: Partial<LayoutElementRow> = {},
+): LayoutElementRow {
+  return {
+    id,
+    layout_id: layoutId,
+    location_id: locationId,
+    element_type: elementType,
+    code: null,
+    name: null,
+    description: null,
+    x,
+    y,
+    visual_width: visualWidth,
+    visual_height: visualHeight,
+    rotation: 0,
+    color: null,
+    icon: null,
+    z_index: 0,
+    label: null,
+    is_locked: false,
+    is_visible: true,
+    created_at: LAYOUT_CREATED,
+    updated_at: LAYOUT_CREATED,
+    ...overrides,
+  }
+}
+
+/** v1 layout rows + element sets; `variant` tweaks a marker for v2. */
+function buildLayoutSeed(): { layouts: LayoutRow[]; layoutElements: LayoutElementRow[] } {
+  const v1: LayoutRow = {
+    id: "layout-planta-v1",
+    organization_id: DEMO_ORG_ID,
+    facility_id: DEMO_FACILITY_ID,
+    name: "Planta Principal",
+    version: 1,
+    status: "published",
+    created_by: "user-demo",
+    description: "Distribución inicial del predio.",
+    changes: null,
+    scale: 20,
+    background: { grid: true, gridSize: 20, color: null } as Json,
+    created_at: LAYOUT_CREATED,
+    updated_at: "2026-09-18T08:00:00.000Z",
+  }
+  const v2: LayoutRow = {
+    ...v1,
+    id: "layout-planta-v2",
+    version: 2,
+    status: "draft",
+    description: "Borrador: puerta de despacho movida al muro sur.",
+    changes: null,
+    created_at: "2026-09-19T06:00:00.000Z",
+    updated_at: "2026-09-19T06:00:00.000Z",
+  }
+
+  const base = (layoutId: string): LayoutElementRow[] => [
+    element("layel-v1-playon", layoutId, "playon", "loc-playon", 20, 20, 440, 150, {
+      color: "#D5D7D8",
+      icon: "Truck",
+      z_index: 0,
+    }),
+    element("layel-v1-galpon", layoutId, "warehouse", "loc-galpon", 20, 200, 440, 300, {
+      color: "#F5F0D6",
+      icon: "Warehouse",
+      z_index: 0,
+    }),
+    ...Array.from({ length: 12 }, (_, i) => {
+      const n = String(i + 1).padStart(2, "0")
+      const col = i % 4
+      const row = Math.floor(i / 4)
+      return element(
+        `layel-v1-sector-${n}`,
+        layoutId,
+        "storage",
+        `loc-sector-${n}`,
+        30 + col * 100,
+        210 + row * 96,
+        92,
+        86,
+        { color: "#E1BA84", icon: "Boxes", z_index: 10 },
+      )
+    }),
+    element("layel-v1-scanner", layoutId, "scanner", "loc-scanner", 480, 40, 44, 44, {
+      color: "#B7DCE8",
+      icon: "ScanLine",
+      z_index: 20,
+    }),
+    element("layel-v1-balanza", layoutId, "scale", "loc-balanza", 480, 100, 44, 44, {
+      color: "#B7DCE8",
+      icon: "Scale",
+      z_index: 20,
+    }),
+    element("layel-v1-rezago", layoutId, "quarantine", "loc-rezago", 480, 180, 100, 110, {
+      color: "#F59E0B",
+      icon: "AlertTriangle",
+      z_index: 20,
+    }),
+    element("layel-v1-secuestro", layoutId, "seizure", "loc-secuestro", 480, 310, 100, 110, {
+      color: "#7C3AED",
+      icon: "ShieldAlert",
+      z_index: 20,
+    }),
+    element("layel-v1-corredor-h", layoutId, "corridor", null, 30, 298, 392, 8, {
+      color: "#CBD5E1",
+      icon: "MoveHorizontal",
+      name: "Circulación central",
+      z_index: 5,
+    }),
+    element("layel-v1-corredor-v", layoutId, "corridor", null, 223, 210, 6, 288, {
+      color: "#CBD5E1",
+      icon: "MoveVertical",
+      name: "Pasillo entre sectores",
+      z_index: 5,
+    }),
+    element("layel-v1-puerta-1", layoutId, "door", null, 190, 192, 60, 8, {
+      color: "#CBD5E1",
+      icon: "DoorOpen",
+      name: "Puerta recepción",
+      z_index: 5,
+    }),
+    element("layel-v1-puerta-2", layoutId, "door", null, 452, 340, 8, 48, {
+      color: "#CBD5E1",
+      icon: "DoorOpen",
+      name: "Puerta despacho",
+      z_index: 5,
+    }),
+    element("layel-v1-espera", layoutId, "other", null, 490, 460, 80, 50, {
+      color: "#B7DCE8",
+      icon: "Shapes",
+      name: "Zona de espera",
+      z_index: 2,
+    }),
+  ]
+
+  // v2 draft differs from v1 in the despacho door only (south wall).
+  const v2elements = base("layout-planta-v2").map((el) =>
+    el.id === "layel-v1-puerta-2"
+      ? { ...el, id: "layel-v2-puerta-2", x: 430, y: 492, visual_width: 60, visual_height: 8 }
+      : el.id === "layel-v1-playon"
+        ? { ...el, id: "layel-v2-playon" }
+        : el.id === "layel-v1-galpon"
+          ? { ...el, id: "layel-v2-galpon" }
+          : el.id === "layel-v1-scanner"
+            ? { ...el, id: "layel-v2-scanner" }
+            : el.id === "layel-v1-balanza"
+              ? { ...el, id: "layel-v2-balanza" }
+              : el.id === "layel-v1-rezago"
+                ? { ...el, id: "layel-v2-rezago" }
+                : el.id === "layel-v1-secuestro"
+                  ? { ...el, id: "layel-v2-secuestro" }
+                  : el.id === "layel-v1-corredor-h"
+                    ? { ...el, id: "layel-v2-corredor-h" }
+                    : el.id === "layel-v1-corredor-v"
+                      ? { ...el, id: "layel-v2-corredor-v" }
+                      : el.id === "layel-v1-puerta-1"
+                        ? { ...el, id: "layel-v2-puerta-1" }
+                        : el.id === "layel-v1-espera"
+                          ? { ...el, id: "layel-v2-espera" }
+                          : { ...el, id: el.id.replace("layel-v1", "layel-v2") },
+  )
+
+  return {
+    layouts: [v1, v2],
+    layoutElements: [...base("layout-planta-v1"), ...v2elements],
+  }
+}
 
 export function createDemoState(): DemoState {
   const org: OrganizationRow = {
@@ -235,12 +431,22 @@ export function createDemoState(): DemoState {
       capacity_max_kg: 90000,
       capacity_max_volume_m3: 450,
     }),
-    location("loc-galpon", "GALPON", "playon", { capacity_max_units: 20000 }),
+    // GALPON is the warehouse BUILDING (zone), not a playón; the editor
+    // taxonomy (ADR 0005) maps warehouse elements to locations.type='zone'.
+    location("loc-galpon", "GALPON", "zone", { capacity_max_units: 20000 }),
     ...Array.from({ length: 12 }, (_, i) => {
       const n = String(i + 1).padStart(2, "0")
-      return location(`loc-sector-${n}`, `SECTOR-${n}`, "zone", { capacity_max_units: 1000 })
+      const isFirst = i === 0 // SECTOR-01 casi lleno → estado OCUPADO en el mapa
+      const inMaintenance = i === 2 // SECTOR-03 en mantenimiento → estado MANTENIMIENTO
+      return location(`loc-sector-${n}`, `SECTOR-${n}`, "zone", {
+        capacity_max_units: isFirst ? 500 : 1000,
+        maintenance: inMaintenance,
+      })
     }),
-    location("loc-scanner", "SCANNER-1", "checkpoint", { checkpoint_kind: "scan" }),
+    location("loc-scanner", "SCANNER-1", "checkpoint", {
+      checkpoint_kind: "scan",
+      capacity_max_units: 100, // lote en cola → PARCIAL en el mapa
+    }),
     location("loc-balanza", "BALANZA-1", "checkpoint", { checkpoint_kind: "scale" }),
     location("loc-rezago", "REZAGO", "zone", { allows_hold: true }),
     location("loc-secuestro", "SECUESTRO", "zone", { allows_hold: true }),
@@ -463,6 +669,40 @@ export function createDemoState(): DemoState {
       updated_at: "2026-09-18T09:40:00.000Z",
     },
     {
+      id: "item-1-4",
+      organization_id: DEMO_ORG_ID,
+      manifest_id: "manifest-1",
+      line_number: 4,
+      sku: "REP-3003",
+      description: "Engranajes línea industrial C",
+      category: "Repuestos",
+      total_quantity: 500,
+      uom: "unit",
+      unit_weight_kg: 3.2,
+      unit_volume_m3: 0.012,
+      status: "discharged",
+      observations: "Almacenado en SECTOR-01 (ocupación al 100%).",
+      created_at: CREATED_AT,
+      updated_at: "2026-09-18T11:20:00.000Z",
+    },
+    {
+      id: "item-1-5",
+      organization_id: DEMO_ORG_ID,
+      manifest_id: "manifest-1",
+      line_number: 5,
+      sku: "PLA-4004",
+      description: "Planchas acero 2mm",
+      category: "Insumos",
+      total_quantity: 300,
+      uom: "unit",
+      unit_weight_kg: 8.1,
+      unit_volume_m3: 0.02,
+      status: "discharged",
+      observations: "Almacenado en SECTOR-02 (parcial).",
+      created_at: CREATED_AT,
+      updated_at: "2026-09-18T11:25:00.000Z",
+    },
+    {
       id: "item-2-1",
       organization_id: DEMO_ORG_ID,
       manifest_id: "manifest-2",
@@ -532,6 +772,40 @@ export function createDemoState(): DemoState {
       created_via_movement_id: 2,
       created_at: CREATED_AT,
       updated_at: "2026-09-18T09:50:00.000Z",
+    },
+    {
+      id: "lot-1-4",
+      organization_id: DEMO_ORG_ID,
+      manifest_id: "manifest-1",
+      cargo_item_id: "item-1-4",
+      parent_lot_id: null,
+      quantity: 500,
+      uom: "unit",
+      status: "in_warehouse",
+      current_location_id: "loc-sector-01",
+      current_truck_id: null,
+      unit_weight_kg: 3.2,
+      unit_volume_m3: 0.012,
+      created_via_movement_id: null,
+      created_at: "2026-09-18T11:20:00.000Z",
+      updated_at: "2026-09-18T11:20:00.000Z",
+    },
+    {
+      id: "lot-1-5",
+      organization_id: DEMO_ORG_ID,
+      manifest_id: "manifest-1",
+      cargo_item_id: "item-1-5",
+      parent_lot_id: null,
+      quantity: 300,
+      uom: "unit",
+      status: "in_warehouse",
+      current_location_id: "loc-sector-02",
+      current_truck_id: null,
+      unit_weight_kg: 8.1,
+      unit_volume_m3: 0.02,
+      created_via_movement_id: null,
+      created_at: "2026-09-18T11:25:00.000Z",
+      updated_at: "2026-09-18T11:25:00.000Z",
     },
     {
       id: "lot-2-1",
@@ -798,8 +1072,10 @@ export function createDemoState(): DemoState {
     quarantineOps,
     seizureOps,
     auditLog,
+    ...buildLayoutSeed(),
     nextMovementId: 6,
     nextMovementItemId: 5,
     nextOpId: 1,
+    nextElementId: 1,
   }
 }

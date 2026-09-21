@@ -10,6 +10,7 @@
 
 import type {
   CargoManifestStatus,
+  LayoutStatus,
   MovementKind,
   QuarantineStatus,
   ScannerResult,
@@ -84,6 +85,17 @@ export interface QuarantineHoldFiltros extends HoldFiltros {
 /** Seizure filters add the secuestro-specific status axis. */
 export interface SeizureHoldFiltros extends HoldFiltros {
   estado?: SeizureStatus
+}
+
+/**
+ * Layout version filters (floor-plan-versioning.md). Layouts are versioned
+ * per (facility_id, name): one row = one version, so reads are ordered by
+ * version inside the client when grouped by name.
+ */
+export interface LayoutFiltros extends PaginationFiltros {
+  facilidadId?: string
+  nombre?: string
+  estado?: LayoutStatus
 }
 
 export interface AuditLogFiltros extends PaginationFiltros {
