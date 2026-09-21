@@ -90,6 +90,235 @@ export interface CambiosLayout {
   counts: { added: number; removed: number; changed: number }
 }
 
+// ---------------------------------------------------------------------
+// Layout diff (floor-plan-versioning.md §Compare algorithm + §changes
+// shape). One engine shared by the Supabase and demo adapters: the
+// element sets are fetched per version and `computarDiffLayout` runs the
+// field-level comparison. The client (component) only renders the result.
+// ---------------------------------------------------------------------
+
+/** The ten diffed fields (doc names; width/height map to visual_* columns). */
+export const CAMPOS_DIFF_LAYOUT = [
+  "x",
+  "y",
+  "width",
+  "height",
+  "rotation",
+  "color",
+  "icon",
+  "label",
+  "is_visible",
+  "location_id",
+] as const
+
+export type LayoutDiffField = (typeof CAMPOS_DIFF_LAYOUT)[number]
+
+export type LayoutDiffValue = string | number | boolean | null
+
+/** Field-level change for an element present in both versions. */
+export interface LayoutDiffFieldChange {
+  element_id: string
+  field: LayoutDiffField
+  before: LayoutDiffValue
+  after: LayoutDiffValue
+}
+
+/** Element present only in the newer (added) or only in the older (removed) set. */
+export interface LayoutDiffActionItem {
+  element_id: string
+  action: "added" | "removed"
+}
+
+/**
+ * Render ref for an element_id that appears in the diff (the diff items
+ * themselves carry only ids per the documented JSON shape). `nombre` is
+ * name ?? label ?? code; the UI falls back to the element-type label.
+ */
+export interface LayoutDiffElementoRef {
+  element_id: string
+  /** Layout version the element row belongs to (from or to). */
+  layout_version: number
+  element_type: LayoutElementType
+  nombre: string | null
+}
+
+/** Server-side diff between two versions of the same (facility, name). */
+export interface LayoutDiff {
+  facility_id: string
+  name: string
+  from_version: number
+  to_version: number
+  added: LayoutDiffActionItem[]
+  removed: LayoutDiffActionItem[]
+  changed: LayoutDiffFieldChange[]
+  counts: { added: number; removed: number; changed: number }
+  /** Render refs for every element_id present in added/removed/changed. */
+  elementos: LayoutDiffElementoRef[]
+}
+
+export interface ComputarDiffLayoutContext {
+  facilityId: string
+  name: string
+  fromVersion: number
+  toVersion: number
+}
+
+/**
+ * Stable join key between two versions' element sets.
+ *
+ * Place elements are linked to a persistent `locations` row
+ * (unique per layout via layout_elements_no_dup_marker_idx), so
+ * `location_id` is their stable identity across versions. Visual-only
+ * elements (corridor/door/other) have no location_id; the scaffold keeps
+ * no stable business key for them, so they match by element_type + name
+ * (or code) when both sides carry one, and unmatched otherwise. An
+ * element with no key in a version is reported added/removed (no
+ * identity to diff against) — the engine-side SQL function should
+ * standardize this key before the element-set comparison.
+ */
+export function claveEstableLayoutElement(el: LayoutElementRow): string | null {
+  if (el.location_id) return `place:${el.location_id}`
+  if (el.code) return `visual:${el.element_type}:code:${el.code}`
+  const nombre = el.name?.trim()
+  if (nombre) return `visual:${el.element_type}:name:${nombre.toLowerCase()}`
+  return null
+}
+
+function leerCampoLayout(el: LayoutElementRow, campo: LayoutDiffField): LayoutDiffValue {
+  switch (campo) {
+    case "x":
+      return el.x
+    case "y":
+      return el.y
+    case "width":
+      return el.visual_width
+    case "height":
+      return el.visual_height
+    case "rotation":
+      return el.rotation
+    case "color":
+      return el.color
+    case "icon":
+      return el.icon
+    case "label":
+      return el.label
+    case "is_visible":
+      return el.is_visible
+    case "location_id":
+      return el.location_id
+  }
+}
+
+function refElemento(el: LayoutElementRow, layoutVersion: number): LayoutDiffElementoRef {
+  return {
+    element_id: el.id,
+    layout_version: layoutVersion,
+    element_type: el.element_type,
+    nombre: el.name ?? el.label ?? el.code ?? null,
+  }
+}
+
+/**
+ * Core diff engine (pure, deterministic, adapter-agnostic).
+ *
+ * - element present in both (stable key) → one LayoutDiffFieldChange per
+ *   differing field of the documented ten;
+ * - present only in `to` → added (element_id = row id in `to`);
+ * - present only in `from` → removed (element_id = row id in `from`).
+ *
+ * `counts.changed` counts FIELD changes (an element moved in x+y = 2),
+ * matching the documented `changes` shape example.
+ */
+export function computarDiffLayout(
+  from: LayoutElementRow[],
+  to: LayoutElementRow[],
+  contexto: ComputarDiffLayoutContext,
+): LayoutDiff {
+  const fromPorClave = new Map<string, LayoutElementRow>()
+  for (const el of from) {
+    const clave = claveEstableLayoutElement(el)
+    if (clave) fromPorClave.set(clave, el)
+  }
+  const toPorClave = new Map<string, LayoutElementRow>()
+  for (const el of to) {
+    const clave = claveEstableLayoutElement(el)
+    if (clave) toPorClave.set(clave, el)
+  }
+
+  const added: LayoutDiffActionItem[] = []
+  const removed: LayoutDiffActionItem[] = []
+  const changed: LayoutDiffFieldChange[] = []
+  const refs = new Map<string, LayoutDiffElementoRef>()
+
+  for (const el of to) {
+    const clave = claveEstableLayoutElement(el)
+    const par = clave ? fromPorClave.get(clave) : undefined
+    if (!par) {
+      added.push({ element_id: el.id, action: "added" })
+      refs.set(el.id, refElemento(el, contexto.toVersion))
+      continue
+    }
+    let tieneCambios = false
+    for (const campo of CAMPOS_DIFF_LAYOUT) {
+      const before = leerCampoLayout(par, campo)
+      const after = leerCampoLayout(el, campo)
+      if (before !== after) {
+        changed.push({ element_id: el.id, field: campo, before, after })
+        tieneCambios = true
+      }
+    }
+    if (tieneCambios) refs.set(el.id, refElemento(el, contexto.toVersion))
+  }
+
+  for (const el of from) {
+    const clave = claveEstableLayoutElement(el)
+    const par = clave ? toPorClave.get(clave) : undefined
+    if (!par) {
+      removed.push({ element_id: el.id, action: "removed" })
+      refs.set(el.id, refElemento(el, contexto.fromVersion))
+    }
+  }
+
+  return {
+    facility_id: contexto.facilityId,
+    name: contexto.name,
+    from_version: contexto.fromVersion,
+    to_version: contexto.toVersion,
+    added,
+    removed,
+    changed,
+    counts: { added: added.length, removed: removed.length, changed: changed.length },
+    elementos: Array.from(refs.values()),
+  }
+}
+
+/** Diff-only element projection (id + stable key + the ten diffed fields). */
+const DIFF_ELEMENTO_COLUMNS =
+  "id, location_id, element_type, code, name, label, x, y, visual_width, visual_height, rotation, color, icon, is_visible"
+
+/**
+ * Shape a computed diff into the persisted `changes` jsonb (documented
+ * §changes shape): same item records (element_id + field/before/after |
+ * action) with their counts. Content is plain JSON-compatible objects,
+ * matching the Json[] collection of `CambiosLayout`.
+ */
+export function aCambiosLayout(diff: LayoutDiff): CambiosLayout {
+  return {
+    from_version: diff.from_version,
+    elements: [
+      ...diff.added.map((item) => ({ element_id: item.element_id, action: item.action })),
+      ...diff.removed.map((item) => ({ element_id: item.element_id, action: item.action })),
+      ...diff.changed.map((item) => ({
+        element_id: item.element_id,
+        field: item.field,
+        before: item.before,
+        after: item.after,
+      })),
+    ],
+    counts: diff.counts,
+  }
+}
+
 /** Draft element payload for guardarBorrador; ids come from existing rows. */
 export interface LayoutElementDraft {
   id?: string
@@ -205,6 +434,13 @@ export interface LayoutService {
   ubicacionesConHoldAbierto(facilidadId: string): Promise<string[]>
   /** First draft or a new draft copied from a base version (audit layout.create). */
   crearVersion(input: CrearVersionInput): Promise<LayoutConElementos>
+  /**
+   * Server-side diff between two versions (floor-plan-versioning.md
+   * §Compare versions). `fromVersion` 0 means the empty baseline (first
+   * publish preview); otherwise both versions must exist for
+   * (facility_id, name). warehouse.read.
+   */
+  obtenerComparacionLayout(facilityId: string, name: string, fromVersion: number, toVersion: number): Promise<LayoutDiff>
   /** Persist a draft's meta + full element set (soft-delete the missing ones). */
   guardarBorrador(input: GuardarBorradorInput): Promise<LayoutConElementos>
   /** draft → published; archives other published versions (audit layout.publish). */
@@ -281,6 +517,67 @@ export class SupabaseLayoutService implements LayoutService {
     if (error) throw new Error(`layout ${id}: ${error.message}`)
     if (!data) return null
     return { layout: data as LayoutRow, elementos: await this.listarElementosVisible(id) }
+  }
+
+  /**
+   * Server-side diff between two versions of (facility_id, name).
+   *
+   * DEVIATION (registered in the doc as "client-side join temporal, engine
+   * server-side pendiente"): no SQL function for this exists in
+   * supabase/migrations (0001..0006 reference layout_elements only for
+   * DDL/RLS/triggers; 0005_views.sql has no diff), and this scaffold has no
+   * Edge Functions, so the join runs HERE in the service over two selects
+   * returning ONLY the diff columns of each version's visible element set.
+   * The client component never receives the sets nor compares them. Home
+   * for the engine-side diff: a SQL function
+   * `public.comparar_layout_versions(_facility_id uuid, _name text,
+   * _from int, _to int) returns jsonb` next to 0005_views.sql, called via
+   * RPC once the Edge Function / RPC path lands.
+   */
+  async obtenerComparacionLayout(
+    facilityId: string,
+    name: string,
+    fromVersion: number,
+    toVersion: number,
+  ): Promise<LayoutDiff> {
+    const client = requireClient(this.client)
+
+    const { data: filas, error } = await client
+      .from("layouts")
+      .select("id, version")
+      .eq("facility_id", facilityId)
+      .eq("name", name)
+      .in("version", [fromVersion, toVersion])
+    if (error) throw new Error(`layouts ${name}: ${error.message}`)
+    const idPorVersion = new Map((filas ?? []).map((f) => [f.version as number, f.id as string]))
+
+    const fromLayoutId = idPorVersion.get(fromVersion)
+    const toLayoutId = idPorVersion.get(toVersion)
+    if (fromVersion > 0 && !fromLayoutId) throw new Error(`versión ${fromVersion} de "${name}" no existe`)
+    if (!toLayoutId) throw new Error(`versión ${toVersion} de "${name}" no existe`)
+
+    const [fromRes, toRes] = await Promise.all([
+      fromLayoutId
+        ? client
+            .from("layout_elements")
+            .select(DIFF_ELEMENTO_COLUMNS)
+            .eq("layout_id", fromLayoutId)
+            .eq("is_visible", true)
+        : Promise.resolve({ data: [], error: null }),
+      client
+        .from("layout_elements")
+        .select(DIFF_ELEMENTO_COLUMNS)
+        .eq("layout_id", toLayoutId)
+        .eq("is_visible", true),
+    ])
+    if (fromRes.error) throw new Error(`layout_elements ${fromLayoutId}: ${fromRes.error.message}`)
+    if (toRes.error) throw new Error(`layout_elements ${toLayoutId}: ${toRes.error.message}`)
+
+    return computarDiffLayout(
+      (fromRes.data ?? []) as LayoutElementRow[],
+      (toRes.data ?? []) as LayoutElementRow[],
+      { facilityId, name, fromVersion, toVersion },
+    )
   }
 
   async obtenerLayoutPublicado(facilidadId: string): Promise<LayoutConElementos | null> {

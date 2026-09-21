@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useBlocker, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, RotateCcw, Save, Send } from "lucide-react"
 import { getServices } from "@/services"
-import type { LayoutConElementos, LayoutElementDraft } from "@/services/layoutService"
+import { aCambiosLayout, type LayoutConElementos, type LayoutDiff, type LayoutElementDraft } from "@/services/layoutService"
 import { useAuth } from "@/integrations/auth/useAuth"
 import { editorStore, useEditor } from "@/components/editor/editorStore"
 import { calcularBounds, FloorPlanCanvas } from "@/components/editor/FloorPlanCanvas"
+import { LayoutDiffTable } from "@/components/editor/LayoutDiffTable"
 import { FloorPlanToolbar } from "@/components/editor/FloorPlanToolbar"
 import { ElementPicker } from "@/components/editor/ElementPicker"
 import { LayerPanel } from "@/components/editor/LayerPanel"
@@ -48,6 +49,9 @@ export function LayoutEditorPage() {
   const [estadoGuardado, setEstadoGuardado] = useState<string | null>(null)
   const [confirmPublicar, setConfirmPublicar] = useState(false)
   const [confirmRestaurar, setConfirmRestaurar] = useState(false)
+  const [diffPublicar, setDiffPublicar] = useState<LayoutDiff | null>(null)
+  const [diffPublicarCargando, setDiffPublicarCargando] = useState(false)
+  const [diffPublicarError, setDiffPublicarError] = useState<string | null>(null)
   const [bloqueo, setBloqueo] = useState<BloqueoDirty | null>(null)
 
   const elements = useEditor((s) => s.elements)
@@ -172,17 +176,67 @@ export function LayoutEditorPage() {
     setBloqueo(null)
   }
 
+  /**
+   * Opens the publish confirmation and computes the server-side diff
+   * against the previous non-draft version (the one that will be
+   * archived) for the preview (ADR 0015 §5: version + description +
+   * change count + resulting diff). The draft is synced first so the
+   * preview reflects what would be published.
+   */
+  const abrirConfirmarPublicar = async () => {
+    if (!layout) return
+    setConfirmPublicar(true)
+    setDiffPublicar(null)
+    setDiffPublicarError(null)
+    setDiffPublicarCargando(true)
+    try {
+      if (dirty) {
+        const guardado = await guardar()
+        if (!guardado) {
+          setDiffPublicarError("No se pudo sincronizar el borrador; el diff puede no reflejar los últimos cambios.")
+        }
+      }
+      const versiones = await getServices().layouts.listarVersiones({
+        facilidadId: layout.layout.facility_id,
+        nombre: layout.layout.name,
+      })
+      const previas = versiones
+        .filter((v) => v.id !== layout.layout.id && v.status !== "draft")
+        .sort((a, b) => b.version - a.version)
+      const diff = await getServices().layouts.obtenerComparacionLayout(
+        layout.layout.facility_id,
+        layout.layout.name,
+        previas[0]?.version ?? 0,
+        layout.layout.version,
+      )
+      setDiffPublicar(diff)
+    } catch (cause) {
+      setDiffPublicarError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setDiffPublicarCargando(false)
+    }
+  }
+
   const publicar = async () => {
     if (!layout) return
     try {
-      const snapshot = editorStore.getSnapshot()
-      const total = snapshot.elements.length
-      const added = snapshot.elements.filter((el) => el.id.startsWith("editor-new-")).length
-      await getServices().layouts.publicarVersion(layout.layout.id, {
-        from_version: 0,
-        elements: [],
-        counts: { added, removed: 0, changed: Math.max(total - added, 0) },
-      }, user?.id)
+      // Persisted `changes` (floor-plan-versioning.md §changes shape):
+      // the real server-side diff when available; the snapshot-based
+      // estimate (pre-existing behavior) as fallback so the flow never
+      // blocks on the preview.
+      const cambios = diffPublicar
+        ? aCambiosLayout(diffPublicar)
+        : {
+            from_version: 0,
+            elements: [],
+            counts: (() => {
+              const snapshot = editorStore.getSnapshot()
+              const total = snapshot.elements.length
+              const added = snapshot.elements.filter((el) => el.id.startsWith("editor-new-")).length
+              return { added, removed: 0, changed: Math.max(total - added, 0) }
+            })(),
+          }
+      await getServices().layouts.publicarVersion(layout.layout.id, cambios, user?.id)
       toast.success("Versión publicada — ya es el plano operativo.")
       editorStore.markClean()
       setConfirmPublicar(false)
@@ -321,7 +375,7 @@ export function LayoutEditorPage() {
                 <Save className="size-4" />
                 {guardando ? "Guardando…" : "Guardar"}
               </Button>
-              <Button size="sm" disabled={!editable} onClick={() => setConfirmPublicar(true)}>
+              <Button size="sm" disabled={!editable} onClick={() => void abrirConfirmarPublicar()}>
                 <Send className="size-4" />
                 Publicar
               </Button>
@@ -382,7 +436,29 @@ export function LayoutEditorPage() {
         open={confirmPublicar}
         onOpenChange={setConfirmPublicar}
         title="Publicar versión"
-        description={`"${layout.layout.name}" v${layout.layout.version} pasará a ser el plano operativo. Las versiones publicadas anteriores quedan archivadas.`}
+        description={
+          <div className="space-y-3 text-left">
+            <p>
+              "{layout.layout.name}" v{layout.layout.version} pasará a ser el plano operativo. Las
+              versiones publicadas anteriores quedan archivadas.
+            </p>
+            {diffPublicarCargando ? (
+              <p className="text-sm text-muted-foreground">Calculando el diff contra la versión anterior…</p>
+            ) : null}
+            {diffPublicarError ? (
+              <p className="text-xs text-destructive">{diffPublicarError}</p>
+            ) : null}
+            {diffPublicar ? (
+              <div className="max-h-72 overflow-y-auto rounded-lg border p-3">
+                <LayoutDiffTable diff={diffPublicar} />
+              </div>
+            ) : !diffPublicarCargando ? (
+              <p className="text-xs text-muted-foreground">
+                El diff no está disponible; podés publicar igualmente con el resumen local.
+              </p>
+            ) : null}
+          </div>
+        }
         confirmLabel="Publicar"
         onConfirm={publicar}
       />

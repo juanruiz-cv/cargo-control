@@ -60,6 +60,10 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   400 authored changed lines → when the running count crosses ~400, ask the
   maintainer once for the chain strategy (stacked-to-main |
   feature-branch-chain) via lossless prompt, then cache it.
+- `chain_strategy`: **feature-branch-chain** (maintainer chose 2026-09-21).
+  feature/web-app = tracker branch; PRs slice por fase targetan el branch
+  previo; solo el tracker mergea a main. Pasado a sdd-prompt no aplica —
+  ODD: registrar límites de slice en este doc al crear cada PR.
 - `per-task heuristic`: ~400 authored changed lines per task; never a hard
   cap, never omit tests/docs to fit.
 

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Copy, Eye, Layers, Map as MapIcon, PencilRuler, Plus, RotateCcw, Send } from "lucide-react"
+import { Copy, Eye, GitCompare, Layers, Map as MapIcon, PencilRuler, Plus, RotateCcw, Send } from "lucide-react"
 import { getServices } from "@/services"
-import type { LayoutVersionRow } from "@/services/layoutService"
+import type { LayoutDiff, LayoutVersionRow } from "@/services/layoutService"
+import { LayoutDiffTable } from "@/components/editor/LayoutDiffTable"
 import { useFacilityId } from "@/hooks/useFacilityId"
 import { useAuth } from "@/integrations/auth/useAuth"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -30,6 +31,22 @@ interface ConfirmAccion {
   nombre: string
 }
 
+interface CompararAccion {
+  name: string
+  from: number
+  to: number
+}
+
+/** change counts from the persisted `changes` jsonb (floor-plan-versioning.md). */
+function countsDeCambios(changes: unknown): { added: number; removed: number; changed: number } | null {
+  if (!changes || typeof changes !== "object") return null
+  const counts = (changes as { counts?: unknown }).counts
+  if (!counts || typeof counts !== "object") return null
+  const { added, removed, changed } = counts as { added?: unknown; removed?: unknown; changed?: unknown }
+  if (typeof added !== "number" || typeof removed !== "number" || typeof changed !== "number") return null
+  return { added, removed, changed }
+}
+
 export function LayoutsPage() {
   const { facilityId, loading: facilityLoading } = useFacilityId()
   const { user, hasPermission } = useAuth()
@@ -40,6 +57,7 @@ export function LayoutsPage() {
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<ConfirmAccion | null>(null)
   const [nuevoAbierto, setNuevoAbierto] = useState(false)
+  const [comparar, setComparar] = useState<CompararAccion | null>(null)
 
   const puedeEditar = hasPermission("warehouse.configure")
 
@@ -138,7 +156,9 @@ export function LayoutsPage() {
           onCrear={() => setNuevoAbierto(true)}
         />
       ) : (
-        grupos.map(([nombre, filas]) => (
+        grupos.map(([nombre, filas]) => {
+          const asc = [...filas].sort((a, b) => a.version - b.version)
+          return (
           <Card key={nombre}>
             <CardHeader>
               <CardTitle className="flex items-center justify-between text-base">
@@ -154,16 +174,31 @@ export function LayoutsPage() {
                 {filas.map((v) => {
                   const estado = ESTADO_LABELS[v.status]
                   const esBorrador = v.status === "draft"
+                  const counts = countsDeCambios(v.changes)
+                  const indice = asc.findIndex((x) => x.id === v.id)
+                  const anterior = indice > 0 ? asc[indice - 1].version : 0
                   return (
                     <li key={v.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
                       <Badge variant={estado.variant}>v{v.version}</Badge>
                       <Badge variant="outline">{estado.label}</Badge>
-                      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-                        {v.creador_nombre
-                          ? `Por ${v.creador_nombre}`
-                          : "Sin autor registrado"}
-                        {" · "}
-                        {formatFecha(v.updated_at)}
+                      <span className="min-w-0 flex-1 text-sm text-muted-foreground">
+                        <span className="block truncate">
+                          {v.creador_nombre
+                            ? `Por ${v.creador_nombre}`
+                            : "Sin autor registrado"}
+                          {" · "}
+                          {formatFecha(v.created_at)}
+                        </span>
+                        {v.description ? (
+                          <span className="block truncate text-xs">{v.description}</span>
+                        ) : null}
+                        {counts ? (
+                          <span className="mt-0.5 block truncate text-xs">
+                            <span className="text-emerald-700">+{counts.added}</span>
+                            <span className="text-red-700"> −{counts.removed} </span>
+                            <span className="text-amber-700">~{counts.changed}</span> campo(s)
+                          </span>
+                        ) : null}
                       </span>
                       <div className="flex items-center gap-1">
                         {esBorrador ? (
@@ -200,6 +235,10 @@ export function LayoutsPage() {
                           <Copy className="size-4" />
                           Nueva versión
                         </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setComparar({ name: v.name, from: anterior, to: v.version })}>
+                          <GitCompare className="size-4" />
+                          Comparar
+                        </Button>
                         {esBorrador ? (
                           <Button size="sm" variant="ghost" disabled={!puedeEditar} onClick={() => setConfirm({ kind: "publicar", layoutId: v.id, nombre: v.name })}>
                             <Send className="size-4" />
@@ -225,7 +264,8 @@ export function LayoutsPage() {
               </ul>
             </CardContent>
           </Card>
-        ))
+          )
+        })
       )}
 
       {confirm ? (
@@ -255,6 +295,19 @@ export function LayoutsPage() {
         versiones={versiones}
         onCreado={(id) => navigate(`/settings/layouts/${id}/edit`)}
       />
+
+      {comparar ? (
+        <CompareVersionesDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setComparar(null)
+          }}
+          facilityId={facilityId}
+          name={comparar.name}
+          versiones={versiones.filter((v) => v.name === comparar.name)}
+          inicial={comparar}
+        />
+      ) : null}
     </div>
   )
 }
@@ -390,4 +443,118 @@ function formatFecha(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleString("es-AR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+}
+
+/**
+ * Read-only version comparison (floor-plan-versioning.md §Compare
+ * versions): two selectors + the server-side diff table. warehouse.read —
+ * no mutation happens here.
+ */
+function CompareVersionesDialog({
+  open,
+  onOpenChange,
+  facilityId,
+  name,
+  versiones,
+  inicial,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  facilityId: string
+  name: string
+  versiones: LayoutVersionRow[]
+  inicial: CompararAccion
+}) {
+  const ordenadas = useMemo(() => [...versiones].sort((a, b) => a.version - b.version), [versiones])
+  const [from, setFrom] = useState(inicial.from)
+  const [to, setTo] = useState(inicial.to)
+  const [resultado, setResultado] = useState<
+    | { estado: "cargando" }
+    | { estado: "error"; mensaje: string }
+    | { estado: "listo"; diff: LayoutDiff }
+  >({ estado: "cargando" })
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    getServices()
+      .layouts.obtenerComparacionLayout(facilityId, name, from, to)
+      .then((d) => {
+        if (!cancelled) setResultado({ estado: "listo", diff: d })
+      })
+      .catch((cause) => {
+        if (!cancelled) setResultado({ estado: "error", mensaje: cause instanceof Error ? cause.message : String(cause) })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, facilityId, name, from, to])
+
+  const cambiarDesde = (value: string | null) => {
+    if (value === null) return
+    setFrom(Number(value))
+    setResultado({ estado: "cargando" })
+  }
+  const cambiarHacia = (value: string | null) => {
+    if (value === null) return
+    setTo(Number(value))
+    setResultado({ estado: "cargando" })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Comparar versiones</DialogTitle>
+          <DialogDescription>
+            Diff calculado server-side entre dos versiones de "{name}" — solo lectura.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-40">
+            <Label>Desde</Label>
+            <Select value={String(from)} onValueChange={cambiarDesde}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Seleccionar versión" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Línea base (plano vacío)</SelectItem>
+                {ordenadas.map((v) => (
+                  <SelectItem key={v.id} value={String(v.version)}>
+                    v{v.version} · {ESTADO_LABELS[v.status].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-40">
+            <Label>Hacia</Label>
+            <Select value={String(to)} onValueChange={cambiarHacia}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Seleccionar versión" />
+              </SelectTrigger>
+              <SelectContent>
+                {ordenadas.map((v) => (
+                  <SelectItem key={v.id} value={String(v.version)}>
+                    v{v.version} · {ESTADO_LABELS[v.status].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="max-h-96 overflow-y-auto rounded-lg border bg-muted/20">
+          {resultado.estado === "cargando" ? (
+            <p className="p-4 text-center text-sm text-muted-foreground">Calculando diff…</p>
+          ) : resultado.estado === "error" ? (
+            <p className="p-4 text-center text-sm text-destructive">{resultado.mensaje}</p>
+          ) : (
+            <div className="p-3">
+              <LayoutDiffTable diff={resultado.diff} />
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 }

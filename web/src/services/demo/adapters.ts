@@ -39,12 +39,14 @@ import {
   PLACE_LOCATION,
   TIPO_CODIGO_PREFIJO,
   TIPOS_LUGAR,
+  computarDiffLayout,
   type CambiosLayout,
   type CrearElementoInput,
   type CrearVersionInput,
   type EliminarElementoResultado,
   type GuardarBorradorInput,
   type LayoutConElementos,
+  type LayoutDiff,
   type LayoutService,
   type LayoutVersionRow,
   type MapaOperativoResultado,
@@ -1336,6 +1338,27 @@ class DemoLayoutService implements LayoutService {
     requirePermission(this.state, "warehouse.read", "obtener layout")
     const row = this.state.layouts.find((l) => l.id === id)
     return row ? clone(this.conCreador(row)) : null
+  }
+
+  async obtenerComparacionLayout(
+    facilityId: string,
+    name: string,
+    fromVersion: number,
+    toVersion: number,
+  ): Promise<LayoutDiff> {
+    requirePermission(this.state, "warehouse.read", "comparar versiones de layout")
+    const versiones = this.state.layouts.filter(
+      (l) => l.facility_id === facilityId && l.name === name,
+    )
+    const from = versiones.find((l) => l.version === fromVersion)
+    const to = versiones.find((l) => l.version === toVersion)
+    if (fromVersion > 0 && !from) throw demoError(`versión ${fromVersion} de "${name}" no existe`)
+    if (!to) throw demoError(`versión ${toVersion} de "${name}" no existe`)
+    return computarDiffLayout(
+      fromVersion > 0 && from ? this.elementosVisibles(from.id) : [],
+      this.elementosVisibles(to.id),
+      { facilityId, name, fromVersion, toVersion },
+    )
   }
 
   async obtenerLayoutConElementos(id: string): Promise<LayoutConElementos | null> {
