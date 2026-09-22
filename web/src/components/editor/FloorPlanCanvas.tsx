@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
 import { Lock } from "lucide-react"
 import type { LayoutElementRow } from "@/types"
-import { docToScreen, screenToDoc, zoomAtPoint, type Viewport } from "@/lib/viewport"
+import { docToScreen, screenToDoc, zoomAtPoint, wheelZoomFactor, type Viewport } from "@/lib/viewport"
 import { ELEMENT_TYPE_META } from "@/components/map/shared/elementMeta"
 import { editorStore, GRID_SIZE, useEditor } from "@/components/editor/editorStore"
 import type { EditorElement } from "@/components/editor/editorStore"
@@ -94,7 +94,7 @@ export function FloorPlanCanvas({ readOnly = false, viewport, setViewport, fit, 
       event.preventDefault()
       const rect = el.getBoundingClientRect()
       const at = { x: event.clientX - rect.left, y: event.clientY - rect.top }
-      setViewport((vp) => zoomAtPoint(vp, event.deltaY < 0 ? 1.25 : 0.8, at.x, at.y))
+      setViewport((vp) => zoomAtPoint(vp, wheelZoomFactor(event.deltaY, event.deltaMode), at.x, at.y))
     }
     el.addEventListener("wheel", onWheel, { passive: false })
     return () => el.removeEventListener("wheel", onWheel)

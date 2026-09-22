@@ -135,7 +135,8 @@ function SidebarNavItem({
           isActive
             ? "bg-primary text-primary-foreground"
             : "text-muted-foreground hover:bg-muted hover:text-foreground",
-          collapsed && "w-full justify-center px-0",
+          collapsed &&
+            "aspect-square h-auto w-full justify-center px-0 rounded-lg",
         )
       }
     >

@@ -3,7 +3,7 @@ import { Truck } from "lucide-react"
 import type { LayoutElementConUbicacion, MapaOperativoResultado } from "@/services/layoutService"
 import type { TruckRow } from "@/types"
 import { useViewport } from "@/hooks/useViewport"
-import { docToScreen, pan, zoomAtPoint, type Viewport } from "@/lib/viewport"
+import { docToScreen, pan, zoomAtPoint, wheelZoomFactor, type Viewport } from "@/lib/viewport"
 import { ELEMENT_TYPE_META } from "@/components/map/shared/elementMeta"
 import {
   capacidadReadable,
@@ -71,8 +71,7 @@ export function OperationalCanvas({
       event.preventDefault()
       const rect = el.getBoundingClientRect()
       const at = { x: event.clientX - rect.left, y: event.clientY - rect.top }
-      const factor = event.deltaY < 0 ? 1.25 : 0.8
-      setViewport((vp) => zoomAtPoint(vp, factor, at.x, at.y))
+      setViewport((vp) => zoomAtPoint(vp, wheelZoomFactor(event.deltaY, event.deltaMode), at.x, at.y))
     }
     el.addEventListener("wheel", onWheel, { passive: false })
     return () => el.removeEventListener("wheel", onWheel)

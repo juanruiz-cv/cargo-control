@@ -23,6 +23,24 @@ export function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 }
 
+/**
+ * Wheel zoom factor from a raw `WheelEvent.deltaY`.
+ *
+ * Exponential, continuous mapping (the pattern used by map/editor tools):
+ * `factor = exp(-deltaY * k)`, so small deltas (trackpads) zoom gently and
+ * a single notched wheel step lands near the old discrete 1.25/0.8 while
+ * staying proportional. `deltaMode` lines/pages are normalized to pixels.
+ * The delta is clamped per event so a fast wheel "flick" cannot explode
+ * the zoom in one listener call.
+ */
+export function wheelZoomFactor(deltaY: number, deltaMode: number): number {
+  const perLine = 16
+  const perPage = 100
+  const px = deltaMode === 1 ? deltaY * perLine : deltaMode === 2 ? deltaY * perPage : deltaY
+  const clamped = Math.max(-320, Math.min(320, px))
+  return Math.exp(-clamped * 0.00175)
+}
+
 export function pan(vp: Viewport, dx: number, dy: number): Viewport {
   return { zoom: vp.zoom, x: vp.x + dx, y: vp.y + dy }
 }
