@@ -98,11 +98,27 @@ export interface LayoutFiltros extends PaginationFiltros {
   estado?: LayoutStatus
 }
 
-export interface AuditLogFiltros extends PaginationFiltros {
+/**
+ * Audit filters (audit.md §Query design). Every predicate is applied
+ * server-side (AU-48); the audit list is always paginated via the
+ * `pagina` parameter of AuditService.listarAudit (bounded, AU-71).
+ */
+export interface AuditLogFiltros {
   actorId?: string
   action?: string // audit.md catalog code (entity.verb)
   entityType?: string
   entityId?: string
+  /**
+   * Camión filter (audit.md §Query design, AU-44): a truck id OR a plate.
+   * A plate is resolved server-side to the truck id; the row predicate is
+   * always `entity_type='truck' AND entity_id=<id>`.
+   */
+  truckId?: string
+  /**
+   * Mercadería filter (AU-45): `entity_type IN
+   * (cargo_item,item_lot,cargo_manifest) AND entity_id=<id>`.
+   */
+  mercaderiaId?: string
   since?: string // created_at >= since
   until?: string // created_at < until
 }

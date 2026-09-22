@@ -19,8 +19,16 @@
 //     policies; the demo mirrors the supervisor flow).
 //   - All ids are `demo/xxx` suffixes: never store them anywhere real.
 
+import {
+  ACTION_CATALOG,
+  normalizarPaginaAudit,
+} from "@/services/auditService"
 import type {
+  ActionCode,
+  ActorOption,
+  AuditPageResult,
   AuditService,
+  PaginaAudit,
 } from "@/services/auditService"
 import type {
   DescargaInput,
@@ -573,10 +581,9 @@ class DemoMovementService implements MovementService {
   /**
    * In-memory mutation per kind (flows.md transitions + legacy rollups).
    * Audit rows use the audit.md CATALOG actions (movement.* / operation.* /
-   * truck.*). Legacy deviations that this work does not touch: the seed
-   * helpers emit `cargo.discharge`, and `quarantine.create` / `seizure.create`
-   * were replaced by the engine path (read-only audits emitted by
-   * `operation.quarantine` / `operation.seizure` — see ejecutarDemo cases).
+   * truck.*). All demo writes use canonical catalog codes (seed.ts was
+   * aligned: truck.arrival on entity_type='truck', movement.discharge,
+   * operation.quarantine / operation.seizure).
    */
   private ejecutarDemo(input: CreateMovementInput): MovementRow {
     const state = this.state
@@ -1317,7 +1324,7 @@ class DemoCargoService implements CargoService {
     manifest.status = "discharged"
     appendAudit(this.state, {
       actor_id: input.operatorId ?? "user-demo",
-      action: "cargo.discharge",
+      action: "movement.discharge",
       entity_type: "cargo_manifest",
       entity_id: input.manifestId,
       before: null,
@@ -1847,21 +1854,62 @@ class DemoAuditService implements AuditService {
     this.state = state
   }
 
-  async listarAudit(filtros?: AuditLogFiltros): Promise<AuditLogRow[]> {
+  /**
+   * Same SQL semantics as SupabaseAuditService: additive AND predicates
+   * over the in-memory auditLog, order created_at desc + id desc, and a
+   * REAL offset window (page 2 never repeats page 1). The Camión filter
+   * accepts id or plate and resolves plate→id against this.state.trucks.
+   */
+  async listarAudit(filtros?: AuditLogFiltros, pagina?: PaginaAudit): Promise<AuditPageResult> {
     requirePermission(this.state, "audit.read", "listar auditoría")
     let rows = this.state.auditLog
     if (filtros?.actorId) rows = rows.filter((a) => a.actor_id === filtros.actorId)
     if (filtros?.action) rows = rows.filter((a) => a.action === filtros.action)
     if (filtros?.entityType) rows = rows.filter((a) => a.entity_type === filtros.entityType)
     if (filtros?.entityId) rows = rows.filter((a) => a.entity_id === filtros.entityId)
+
+    const truckId = filtros?.truckId
+    if (truckId) {
+      const camion = this.state.trucks.find(
+        (t) => t.id === truckId || normalizePlate(t.plate) === normalizePlate(truckId),
+      )
+      // Unresolvable id/plate → empty page, same as the SQL path (AU-44).
+      if (!camion) return { filas: [], total: 0 }
+      rows = rows.filter((a) => a.entity_type === "truck" && a.entity_id === camion.id)
+    }
+
+    const mercaderiaId = filtros?.mercaderiaId
+    if (mercaderiaId) {
+      rows = rows.filter(
+        (a) =>
+          a.entity_id === mercaderiaId &&
+          (a.entity_type === "cargo_item" || a.entity_type === "item_lot" || a.entity_type === "cargo_manifest"),
+      )
+    }
+
     if (filtros?.since) rows = rows.filter((a) => a.created_at >= filtros.since!)
     if (filtros?.until) rows = rows.filter((a) => a.created_at < filtros.until!)
-    return clone(applyLimit([...rows].sort((a, b) => b.created_at.localeCompare(a.created_at)), filtros))
+
+    const ordenadas = [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)
+    const { page, pageSize } = normalizarPaginaAudit(pagina)
+    const inicio = (page - 1) * pageSize
+    return {
+      filas: clone(ordenadas.slice(inicio, inicio + pageSize)),
+      total: ordenadas.length,
+    }
   }
 
-  async detalle(id: number): Promise<AuditLogRow | null> {
+  async obtenerDetalle(id: number): Promise<AuditLogRow | null> {
     const row = this.state.auditLog.find((a) => a.id === id)
     return row ? clone(row) : null
+  }
+
+  async obtenerCatalogoAcciones(): Promise<ActionCode[]> {
+    return [...ACTION_CATALOG]
+  }
+
+  async obtenerActores(): Promise<ActorOption[]> {
+    return this.state.users.map((u) => ({ id: u.id, nombre: u.full_name ?? u.id }))
   }
 }
 
