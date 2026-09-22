@@ -106,7 +106,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T11 | Scanner / Balanza / Rezago / Secuestro modules (queues, operations, holds, seizure workflow, attachments) | delegated | done (86806be) |
 | T12 | Dashboard: real aggregates (queries with aggregation, not full history to browser) | delegated | done (b17b1a7) |
 | T13 | Audit module: AuditLog list/details/filters/timeline, read-only for normal users | delegated | done (e86b535) |
-| T14 | Reports: truck/entries/exits/cargo/movements/occupancy/scanner/scale/quarantine/seizure/audit, filters + CSV export | delegated | in-progress |
+| T14 | Reports: truck/entries/exits/cargo/movements/occupancy/scanner/scale/quarantine/seizure/audit, filters + CSV export | delegated | done (2fa99b3) |
 | T15 | Responsive: desktop-first, tablet (icon rail, data preserved, write path identical), breakpoints via tokens | delegated | pending |
 | T16 | SEO: public pages only (/, /login, /about, /help, /contact), robots.txt, sitemap, OG, noindex internal routes | delegated | pending |
 | T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | delegated | pending |
