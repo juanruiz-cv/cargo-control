@@ -1,0 +1,294 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Cargo Control design tokens.
+ * Source of truth: docs/brand/design-tokens.md + docs/brand/colors.md.
+ * Naming convention: --cc-<group>-<name>. Role tokens (--cc-color-*) are
+ * preferred over raw palette in components.
+ */
+
+:root {
+  /* palette */
+  --cc-primary: #1f4e5f;
+  --cc-primary-light: #b7dce8;
+  --cc-bg: #eef3f5;
+  --cc-surface: #ffffff;
+  --cc-text: #1f2933;
+  --cc-text-secondary: #64748b;
+  --cc-border: #cbd5e1;
+
+  /* physical zones (facility views only, never UI chrome) */
+  --cc-zone-warehouse: #f5f0d6;
+  --cc-zone-warehouse-area: #e1ba84;
+  --cc-zone-playon: #d5d7d8;
+
+  /* status */
+  --cc-success: #16a34a;
+  --cc-info: #2563eb;
+  --cc-warning: #f59e0b;
+  --cc-danger: #dc2626;
+  --cc-blocked: #7c3aed;
+
+  /* role aliases */
+  --cc-color-bg: var(--cc-bg);
+  --cc-color-surface: var(--cc-surface);
+  --cc-color-text: var(--cc-text);
+  --cc-color-text-secondary: var(--cc-text-secondary);
+  --cc-color-border: var(--cc-border);
+
+  /* spacing scale (base unit 4px) */
+  --cc-space-0: 0;
+  --cc-space-1: 2px;
+  --cc-space-2: 4px;
+  --cc-space-3: 6px;
+  --cc-space-4: 8px;
+  --cc-space-5: 12px;
+  --cc-space-6: 16px;
+  --cc-space-7: 20px;
+  --cc-space-8: 24px;
+  --cc-space-9: 32px;
+
+  /* radius */
+  --cc-radius-sm: 4px;
+  --cc-radius-md: 6px;
+  --cc-radius-lg: 10px;
+  --cc-radius-full: 9999px;
+
+  /* border */
+  --cc-border-width: 1px;
+  --cc-border-color: var(--cc-border);
+
+  /* shadow */
+  --cc-shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
+  --cc-shadow-md: 0 4px 12px rgb(15 23 42 / 0.08);
+  --cc-shadow-lg: 0 8px 24px rgb(15 23 42 / 0.12);
+
+  /* typography */
+  --cc-typo-font: "Inter Variable", "Inter", system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --cc-typo-mono: ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+
+  --cc-typo-size-xs: 12px;
+  --cc-typo-size-sm: 13px;
+  --cc-typo-size-base: 14px;
+  --cc-typo-size-md: 15px;
+  --cc-typo-size-lg: 17px;
+  --cc-typo-size-xl: 20px;
+
+  --cc-typo-weight-regular: 400;
+  --cc-typo-weight-medium: 500;
+  --cc-typo-weight-semibold: 600;
+
+  --cc-typo-leading-xs: 16px;
+  --cc-typo-leading-sm: 18px;
+  --cc-typo-leading-base: 20px;
+  --cc-typo-leading-md: 22px;
+  --cc-typo-leading-lg: 24px;
+  --cc-typo-leading-xl: 28px;
+
+  /* control and icon sizes */
+  --cc-size-control-sm: 28px;
+  --cc-size-control-md: 32px;
+  --cc-size-control-lg: 38px;
+
+  --cc-size-icon-16: 16px;
+  --cc-size-icon-18: 18px;
+  --cc-size-icon-20: 20px;
+  --cc-size-icon-24: 24px;
+
+  /* motion */
+  --cc-motion-fast: 120ms;
+  --cc-motion-base: 200ms;
+  --cc-motion-slow: 320ms;
+  --cc-motion-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* elevation / z-index */
+  --cc-z-dropdown: 30;
+  --cc-z-sticky: 40;
+  --cc-z-overlay: 50;
+  --cc-z-dialog: 60;
+  --cc-z-drawer: 60;
+  --cc-z-toast: 70;
+}
+
+/*
+ * Tailwind theme mapping.
+ * Semantic utilities resolve to the --cc-* role tokens above.
+ */
+@theme inline {
+  --font-sans: var(--cc-typo-font);
+  --font-heading: var(--font-sans);
+  --font-mono: var(--cc-typo-mono);
+
+  /* brand + status + zone palette utilities */
+  --color-primary-light: var(--cc-primary-light);
+  --color-surface: var(--cc-surface);
+  --color-success: var(--cc-success);
+  --color-info: var(--cc-info);
+  --color-warning: var(--cc-warning);
+  --color-danger: var(--cc-danger);
+  --color-blocked: var(--cc-blocked);
+  --color-zone-warehouse: var(--cc-zone-warehouse);
+  --color-zone-warehouse-area: var(--cc-zone-warehouse-area);
+  --color-zone-playon: var(--cc-zone-playon);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  /* type scale (docs/brand/typography.md) */
+  --text-xs: var(--cc-typo-size-xs);
+  --text-xs--line-height: var(--cc-typo-leading-xs);
+  --text-sm: var(--cc-typo-size-sm);
+  --text-sm--line-height: var(--cc-typo-leading-sm);
+  --text-base: var(--cc-typo-size-base);
+  --text-base--line-height: var(--cc-typo-leading-base);
+  --text-md: var(--cc-typo-size-md);
+  --text-md--line-height: var(--cc-typo-leading-md);
+  --text-lg: var(--cc-typo-size-lg);
+  --text-lg--line-height: var(--cc-typo-leading-lg);
+  --text-xl: var(--cc-typo-size-xl);
+  --text-xl--line-height: var(--cc-typo-leading-xl);
+
+  /* breakpoints */
+  --breakpoint-xs: 0;
+  --breakpoint-sm: 480px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1600px;
+  --breakpoint-2xl: 1920px;
+
+  /* radii (docs/brand/design-tokens.md §4) */
+  --radius-sm: var(--cc-radius-sm);
+  --radius-md: var(--cc-radius-md);
+  --radius-lg: var(--cc-radius-lg);
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+  --radius-3xl: 22px;
+  --radius-4xl: 26px;
+
+  /* shadows (design-tokens §4) */
+  --shadow-sm: var(--cc-shadow-sm);
+  --shadow-md: var(--cc-shadow-md);
+  --shadow-lg: var(--cc-shadow-lg);
+
+  --ease-cc: var(--cc-motion-ease);
+}
+
+/*
+ * shadcn/ui semantic variables mapped to Cargo Control role tokens.
+ * Light-first; dark mode is a future phase (design-tokens §9: maps roles,
+ * not raw palette).
+ */
+:root {
+  --background: var(--cc-bg);
+  --foreground: var(--cc-text);
+  --card: var(--cc-surface);
+  --card-foreground: var(--cc-text);
+  --popover: var(--cc-surface);
+  --popover-foreground: var(--cc-text);
+  --primary: var(--cc-primary);
+  --primary-foreground: var(--cc-surface);
+  --secondary: color-mix(in srgb, var(--cc-primary-light) 30%, var(--cc-surface));
+  --secondary-foreground: var(--cc-primary);
+  --muted: color-mix(in srgb, var(--cc-primary-light) 14%, var(--cc-surface));
+  --muted-foreground: var(--cc-text-secondary);
+  --accent: color-mix(in srgb, var(--cc-primary-light) 14%, var(--cc-surface));
+  --accent-foreground: var(--cc-text);
+  --destructive: var(--cc-danger);
+  --border: var(--cc-border);
+  --input: var(--cc-border);
+  --ring: var(--cc-primary-light);
+  --chart-1: var(--cc-primary);
+  --chart-2: var(--cc-info);
+  --chart-3: var(--cc-success);
+  --chart-4: var(--cc-warning);
+  --chart-5: var(--cc-blocked);
+  --radius: var(--cc-radius-lg);
+  --sidebar: var(--cc-surface);
+  --sidebar-foreground: var(--cc-text);
+  --sidebar-primary: var(--cc-primary);
+  --sidebar-primary-foreground: var(--cc-surface);
+  --sidebar-accent: color-mix(in srgb, var(--cc-primary-light) 30%, var(--cc-surface));
+  --sidebar-accent-foreground: var(--cc-primary);
+  --sidebar-border: var(--cc-border);
+  --sidebar-ring: var(--cc-primary-light);
+}
+
+.dark {
+  /* Placeholder: dark mode maps role tokens in a future phase. */
+  --background: var(--cc-bg);
+  --foreground: var(--cc-text);
+  --card: var(--cc-surface);
+  --card-foreground: var(--cc-text);
+  --popover: var(--cc-surface);
+  --popover-foreground: var(--cc-text);
+  --primary: var(--cc-primary);
+  --primary-foreground: var(--cc-surface);
+  --secondary: color-mix(in srgb, var(--cc-primary-light) 30%, var(--cc-surface));
+  --secondary-foreground: var(--cc-primary);
+  --muted: color-mix(in srgb, var(--cc-primary-light) 14%, var(--cc-surface));
+  --muted-foreground: var(--cc-text-secondary);
+  --accent: color-mix(in srgb, var(--cc-primary-light) 14%, var(--cc-surface));
+  --accent-foreground: var(--cc-text);
+  --destructive: var(--cc-danger);
+  --border: var(--cc-border);
+  --input: var(--cc-border);
+  --ring: var(--cc-primary-light);
+  --sidebar: var(--cc-surface);
+  --sidebar-foreground: var(--cc-text);
+  --sidebar-primary: var(--cc-primary);
+  --sidebar-primary-foreground: var(--cc-surface);
+  --sidebar-accent: color-mix(in srgb, var(--cc-primary-light) 30%, var(--cc-surface));
+  --sidebar-accent-foreground: var(--cc-primary);
+  --sidebar-border: var(--cc-border);
+  --sidebar-ring: var(--cc-primary-light);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings:
+      "calt" 0,
+      "cv11" 1;
+  }
+}
