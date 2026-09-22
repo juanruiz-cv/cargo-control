@@ -72,6 +72,11 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   2,379 L) · PR #7 tracker feature/web-app→main (DRAFT, 30,740 L,
   no-merge hasta integrar children). Todos con `size:exception` implícito
   por scaffold vendor/generado no divisible; budgets en body de cada PR.
+- **INTEGRADO 2026-09-22**: revisados 6 slices (build+lint+tsc OK en commit
+  exacto, diffs limpios), tracker PR #7 marcado ready vía GraphQL y merged a
+  main (merge commit 8763440). PRs #1-6 cerrados con comentario de
+  integración. `main` = 8763440 == feature/web-app. Branch feature/web-app
+  continúa para T11+.
 - `per-task heuristic`: ~400 authored changed lines per task; never a hard
   cap, never omit tests/docs to fit.
 
