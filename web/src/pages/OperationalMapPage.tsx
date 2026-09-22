@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { ChevronDown, LayersIcon, MapIcon, Search } from "lucide-react"
 import { getServices } from "@/services"
 import type { MapaOperativoResultado } from "@/services/layoutService"
 import type { TruckRow } from "@/types"
+import { ROUTES } from "@/config/routes"
 import { useFacilityId } from "@/hooks/useFacilityId"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
+import { derivarEstadoCamion, type TruckDisplayStatus } from "@/components/trucks/truckStatus"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { LoadingState } from "@/components/shared/LoadingState"
 import { ErrorState } from "@/components/shared/ErrorState"
@@ -36,9 +38,11 @@ interface Filtros {
 const FILTROS_INICIALES: Filtros = { tipo: "todos", estado: "todos", busqueda: "" }
 
 export function OperationalMapPage() {
+  const navigate = useNavigate()
   const { facilityId, loading: facilityLoading } = useFacilityId()
   const [resultado, setResultado] = useState<MapaOperativoResultado | null>(null)
   const [camiones, setCamiones] = useState<TruckRow[]>([])
+  const [estadosCamion, setEstadosCamion] = useState<Record<string, TruckDisplayStatus>>({})
   const [locsConHold, setLocsConHold] = useState<ReadonlySet<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -63,8 +67,19 @@ export function OperationalMapPage() {
           services.trucks.listar({ estado: "in_playon" }),
         ])
         if (cancelled) return
+        // Derived-status per truck (T-21): same badges the trucks module
+        // shows, so the playón chips are not a second, weaker vocabulary.
+        const estados: Record<string, TruckDisplayStatus> = {}
+        if (trucks.length > 0) {
+          const señales = await services.trucks.obtenerSeñales(trucks.map((t) => t.id))
+          for (let i = 0; i < trucks.length; i += 1) {
+            estados[trucks[i].id] = derivarEstadoCamion(trucks[i], señales[i])
+          }
+        }
+        if (cancelled) return
         setResultado(mapa)
         setCamiones(trucks)
+        setEstadosCamion(estados)
         setLocsConHold(new Set(conHold))
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
@@ -234,7 +249,9 @@ export function OperationalMapPage() {
             resultado={resultadoFiltrado}
             ubicacionesConHoldAbierto={locsConHold}
             camionesEnPlayon={camiones}
+            estadosCamion={estadosCamion}
             onSeleccionar={(e) => setSeleccionId(e.elemento.id)}
+            onSeleccionarCamion={(id) => navigate(`${ROUTES.trucks}/${id}`)}
           />
         ) : (
           <EmptyState

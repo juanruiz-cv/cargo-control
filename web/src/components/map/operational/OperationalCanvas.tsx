@@ -4,6 +4,12 @@ import type { LayoutElementConUbicacion, MapaOperativoResultado } from "@/servic
 import type { TruckRow } from "@/types"
 import { useViewport } from "@/hooks/useViewport"
 import { docToScreen, pan, zoomAtPoint, wheelZoomFactor, type Viewport } from "@/lib/viewport"
+import { cn } from "cn"
+import {
+  TRUCK_DISPLAY_STATUS_CLASS,
+  TRUCK_DISPLAY_STATUS_LABELS,
+  type TruckDisplayStatus,
+} from "@/components/trucks/truckStatus"
 import { ELEMENT_TYPE_META } from "@/components/map/shared/elementMeta"
 import {
   capacidadReadable,
@@ -18,7 +24,11 @@ export interface OperationalCanvasProps {
   resultado: MapaOperativoResultado
   ubicacionesConHoldAbierto: ReadonlySet<string>
   camionesEnPlayon: TruckRow[]
+  /** Derived display status per truck (T-21) — same badges as the trucks module. */
+  estadosCamion?: Record<string, TruckDisplayStatus>
   onSeleccionar: (elemento: LayoutElementConUbicacion) => void
+  /** Navigate to a truck detail from a playón chip. */
+  onSeleccionarCamion?: (truckId: string) => void
 }
 
 interface ElementoRender extends LayoutElementConUbicacion {
@@ -44,7 +54,9 @@ export function OperationalCanvas({
   resultado,
   ubicacionesConHoldAbierto,
   camionesEnPlayon,
+  estadosCamion,
   onSeleccionar,
+  onSeleccionarCamion,
 }: OperationalCanvasProps) {
   const bounds = calcularBounds(resultado)
   const { containerRef, viewport, setViewport, zoomIn, zoomOut, fit, atMinZoom, atMaxZoom } =
@@ -53,15 +65,17 @@ export function OperationalCanvas({
   const [tooltip, setTooltip] = useState<{ x: number; y: number } | null>(null)
   const dragRef = useRef<{ startX: number; startY: number; vp: Viewport } | null>(null)
 
-  // Fit once the container has a size (and whenever the document bounds change).
-  const fittedRef = useRef<string | null>(null)
-  const fitKey = `${bounds.width}x${bounds.height}`
+  // Initial position: 100% zoom, document origin pinned to the left edge
+  // (desktop-first doctrine). The Fit action is still available in the
+  // ZoomControls for an overview.
+  const positionedRef = useRef(false)
   useEffect(() => {
-    if (fittedRef.current !== fitKey) {
-      fittedRef.current = fitKey
-      fit()
-    }
-  }, [fitKey, fit])
+    if (positionedRef.current) return
+    positionedRef.current = true
+    const el = containerRef.current
+    if (!el) return
+    setViewport({ zoom: 1, x: 0, y: 0 })
+  }, [containerRef, setViewport])
 
   // Wheel zoom at cursor — native non-passive listener (React wheel is passive).
   useEffect(() => {
@@ -199,15 +213,25 @@ export function OperationalCanvas({
                 top: playonScreen.y + (playon.elemento.visual_height ?? 40) * viewport.zoom + 4,
               }}
             >
-              {camionesEnPlayon.map((truck) => (
-                <div
-                  key={truck.id}
-                  className="flex w-fit items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-xs font-medium shadow-sm"
-                >
-                  <Truck className="size-3.5 text-muted-foreground" />
-                  {truck.plate}
-                </div>
-              ))}
+              {camionesEnPlayon.map((truck) => {
+                const estado = estadosCamion?.[truck.id] ?? "in_playon"
+                return (
+                  <button
+                    key={truck.id}
+                    type="button"
+                    title={`${truck.plate} — ${TRUCK_DISPLAY_STATUS_LABELS[estado]}`}
+                    onClick={() => onSeleccionarCamion?.(truck.id)}
+                    className={cn(
+                      "group flex w-fit cursor-pointer items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium shadow-sm transition-colors",
+                      "hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring",
+                      TRUCK_DISPLAY_STATUS_CLASS[estado],
+                    )}
+                  >
+                    <Truck className="size-3.5 shrink-0" />
+                    {truck.plate}
+                  </button>
+                )
+              })}
             </div>
           ) : null}
         </div>
