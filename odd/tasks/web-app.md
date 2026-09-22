@@ -104,7 +104,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T9 | Cargo module: manifests, items, split (item_lots), transfer flows, capacities | delegated | done (4caa7a7; ManifestList/Detail/Form, ItemForm, SplitDialog validación 0<cant<lote, TransferDialog con capacidad, DischargeDialog, MovementsTimeline/Detail/Filters; fix bug real idCounter=100_000 en demo (colisión manifest-1 con seed); 19/19 demo flow PASS incl. RBAC operator split OK / viewer rechazado / seized transfer rechazado; risk medium; build+lint+tsc pass) |
 | T10 | Movement engine: 15 kinds, transactional service, operation_key idempotency, guards (I1-I7), audit wiring | delegated | done (7dbd8cd; lib/movement-guards.ts puro I1-I7, RegistrarMovimientoDialog, movementService ejecutarMovimiento con op_key replay, corrección con previous_movement_id; bug real fixeado: I6_LOTES_RETENIDOS no-op en egress → contexto carga todos los lotes del manifest; 23/23 runtime + 7/7 demo PASS; risk medium; build+lint+tsc pass) |
 | T11 | Scanner / Balanza / Rezago / Secuestro modules (queues, operations, holds, seizure workflow, attachments) | delegated | done (86806be) |
-| T12 | Dashboard: real aggregates (queries with aggregation, not full history to browser) | delegated | pending |
+| T12 | Dashboard: real aggregates (queries with aggregation, not full history to browser) | delegated | in-progress |
 | T13 | Audit module: AuditLog list/details/filters/timeline, read-only for normal users | delegated | pending |
 | T14 | Reports: truck/entries/exits/cargo/movements/occupancy/scanner/scale/quarantine/seizure/audit, filters + CSV export | delegated | pending |
 | T15 | Responsive: desktop-first, tablet (icon rail, data preserved, write path identical), breakpoints via tokens | delegated | pending |

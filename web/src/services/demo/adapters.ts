@@ -28,7 +28,17 @@ import type {
   TransferItemInput,
 } from "@/services/cargoService"
 import type { CargoService } from "@/services/cargoService"
-import type { DashboardService } from "@/services/dashboardService"
+import type {
+  DashboardService,
+  SerieFila,
+  SerieFiltros,
+  SerieTipo,
+} from "@/services/dashboardService"
+import {
+  computarMetricasDemo,
+  computarSerieDemo,
+  computarSnapshotOcupacionDemo,
+} from "@/services/demo/dashboardAggregates"
 import type {
   HoldService,
 } from "@/services/holdService"
@@ -110,6 +120,7 @@ import type {
   CargoManifestRow,
   CapacityUpdate,
   DashboardMetricsRow,
+  DashboardOccupancySnapshotRow,
   ItemLotRow,
   Json,
   LayoutElementRow,
@@ -1861,37 +1872,26 @@ class DemoDashboardService implements DashboardService {
     this.state = state
   }
 
+  /**
+   * KPIs aggregated by the pure mirror of the v8 SQL views
+   * (dashboardAggregates.ts) — the demo returns the SAME numbers the
+   * database would for the same story, not ad-hoc derivations.
+   * warehouse.read is the base dashboard read (route gate); the page still
+   * hides per-module cards via the RBAC matrix.
+   */
   async obtenerMetricas(): Promise<DashboardMetricsRow | null> {
-    requirePermission(this.state, "cargo.read", "métricas de dashboard")
-    const lots = this.state.lots
-    const inYard = this.state.trucks.filter((t) => t.status === "in_playon").length
-    const sectorsZones = this.state.locations.filter((l) => l.type === "zone")
-    const occupiedSectors = new Set(
-      lots.filter((l) => l.current_location_id && this.state.locations.find((loc) => loc.id === l.current_location_id)?.type === "zone")
-        .map((l) => l.current_location_id),
-    ).size
-    const sumQty = (predicate: (l: ItemLotRow) => boolean) =>
-      lots.filter(predicate).reduce((acc, l) => acc + l.quantity, 0)
-    const sumWeight = (predicate: (l: ItemLotRow) => boolean) =>
-      lots.filter(predicate).reduce((acc, l) => acc + (l.unit_weight_kg ?? 0) * l.quantity, 0)
-    return {
-      organization_id: this.state.organization.id,
-      trucks_in_yard: inYard,
-      trucks_waiting: inYard,
-      trucks_discharging: 0,
-      merchandise_stored: sumQty((l) => l.status === "in_warehouse"),
-      merchandise_stored_weight_kg: sumWeight((l) => l.status === "in_warehouse"),
-      merchandise_in_scanner: sumQty(
-        (l) => l.current_location_id === "loc-scanner",
-      ),
-      merchandise_in_scale: sumQty(
-        (l) => l.current_location_id === "loc-balanza",
-      ),
-      merchandise_in_quarantine: sumQty((l) => l.status === "in_quarantine"),
-      merchandise_seized: sumQty((l) => l.status === "seized"),
-      sectors_occupied: occupiedSectors,
-      sectors_free: sectorsZones.length - occupiedSectors,
-    }
+    requirePermission(this.state, "warehouse.read", "métricas de dashboard")
+    return computarMetricasDemo(this.state)
+  }
+
+  async obtenerSerie(tipo: SerieTipo, filtros?: SerieFiltros): Promise<SerieFila[]> {
+    requirePermission(this.state, "warehouse.read", "series de dashboard")
+    return computarSerieDemo(this.state, tipo, filtros)
+  }
+
+  async obtenerOcupacionSnapshot(): Promise<DashboardOccupancySnapshotRow[]> {
+    requirePermission(this.state, "warehouse.read", "ocupación de dashboard")
+    return computarSnapshotOcupacionDemo(this.state)
   }
 }
 

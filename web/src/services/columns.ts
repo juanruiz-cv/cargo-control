@@ -56,6 +56,21 @@ export const LOCATION_OCCUPANCY_COLUMNS =
 export const DASHBOARD_METRICS_COLUMNS =
   "organization_id, trucks_in_yard, trucks_waiting, trucks_discharging, merchandise_stored, merchandise_stored_weight_kg, merchandise_in_scanner, merchandise_in_scale, merchandise_in_quarantine, merchandise_seized, sectors_occupied, sectors_free"
 
+export const DASHBOARD_SERIES_ARRIVALS_COLUMNS =
+  "organization_id, liquidity_day, arrivals"
+
+export const DASHBOARD_SERIES_MOVEMENTS_COLUMNS =
+  "organization_id, liquidity_day, kind, movements"
+
+export const DASHBOARD_SERIES_TRUCKS_PROCESSED_COLUMNS =
+  "organization_id, liquidity_day, trucks_processed"
+
+export const DASHBOARD_SERIES_MERCHANDISE_PROCESSED_COLUMNS =
+  "organization_id, liquidity_day, merchandise_processed"
+
+export const DASHBOARD_OCCUPANCY_SNAPSHOT_COLUMNS =
+  "location_id, organization_id, facility_id, code, occupancy_kg, occupancy_m3, occupancy_units, pct_kg, pct_m3, pct_units"
+
 export const STATION_QUEUE_COLUMNS =
   "queue_kind, item_lot_id, organization_id, manifest_id, cargo_item_id, lot_status, quantity, uom, checkpoint_location_id, checkpoint_code, sku, item_description, manifest_code, truck_id, created_at"
 
