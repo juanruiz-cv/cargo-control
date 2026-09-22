@@ -64,6 +64,14 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   feature/web-app = tracker branch; PRs slice por fase targetan el branch
   previo; solo el tracker mergea a main. Pasado a sdd-prompt no aplica —
   ODD: registrar límites de slice en este doc al crear cada PR.
+- **Slices creados 2026-09-22** (push + PRs a juanruiz-cv/cargo-control):
+  PR #1 slice-1-foundation (main←1427ae0..54e0267, 11,952 L) · PR #2
+  slice-2-data-auth (→slice-1, 6,807 L) · PR #3 slice-3-floorplan
+  (→slice-2, 5,396 L) · PR #4 slice-4-trucks (→slice-3, 1,685 L) · PR #5
+  slice-5-cargo (→slice-4, 2,911 L) · PR #6 slice-6-movement (→slice-5,
+  2,379 L) · PR #7 tracker feature/web-app→main (DRAFT, 30,740 L,
+  no-merge hasta integrar children). Todos con `size:exception` implícito
+  por scaffold vendor/generado no divisible; budgets en body de cada PR.
 - `per-task heuristic`: ~400 authored changed lines per task; never a hard
   cap, never omit tests/docs to fit.
 
