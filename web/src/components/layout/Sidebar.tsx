@@ -139,7 +139,9 @@ function SidebarNavItem({
         )
       }
     >
-      <item.icon className="size-4 shrink-0" />
+      <item.icon
+        className={cn("size-4 shrink-0", collapsed && "size-[18px]")}
+      />
       <span className={cn("truncate", collapsed && "hidden")}>
         {item.label}
       </span>
@@ -148,7 +150,7 @@ function SidebarNavItem({
 
   return collapsed ? (
     <Tooltip>
-      <TooltipTrigger>{link}</TooltipTrigger>
+      <TooltipTrigger render={link} />
       <TooltipContent side="right" sideOffset={8}>
         {item.label}
       </TooltipContent>
