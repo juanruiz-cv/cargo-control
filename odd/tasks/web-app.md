@@ -112,6 +112,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | delegated | pending |
 | T18 | Performance: lazy loading, code splitting, pagination, debounce, memoization, aggregations, map partial updates | delegated | pending |
 | T19 | Final audit: documentation vs implementation report (senior arch/front/back/QA/UX/security), then fix findings | delegated | pending |
+| T20 | Map truck finder: right-side panel with debounced plate/company search listing every truck with its derived location, click centers the map on its chip | delegated | in-progress |
 
 ## Progress
 

@@ -43,6 +43,33 @@ Playón renders **truck chips** at their lane positions when known
 (otherwise grouped in a "Camiones en playón" cluster): plate + state
 badge; click selects the truck.
 
+## Truck finder panel (right)
+
+A right-side panel lists trucks with a **debounced (300 ms) search** by
+plate or transporter; it is the map's "where is my truck?" entry point.
+
+- **Search**: filters the full truck catalog by plate/company, debounced
+  300 ms (ADR 0016); the list shows every truck, not only those on the
+  playón.
+- **Row content**: plate (bold), derived state badge (same
+  `derivarEstadoCamion` taxonomy as the trucks module — never a second
+  vocabulary), transporter, and a location hint:
+  - On the playón → "En playón" + the sector it renders over;
+  - Not on the playón → its derived state label (En ruta / Disponible /
+    Retenido / En balanza …).
+- **Click behavior**: selects the truck — the map **centers the viewport
+  on the truck chip** (pan/zoom without leaving the map) and opens the
+  same truck detail panel as clicking the chip; a second click on the
+  same row keeps the panel open.
+- **Permissions**: the panel is a `truck.read` surface (the map route is
+  `warehouse.read`); rows/counters never reveal rows the caller cannot
+  read. RLS remains the authority; the panel only hides unavailable rows.
+- **Empty states**: no match → "Sin resultados"; no trucks at all →
+  "Sin camiones registrados".
+- **Live sync**: the panel follows the same refresh cycle as the canvas
+  (occupancy/movement/hold signals); a truck leaving the playón drops
+  from the map chips but stays listed with its new derived location.
+
 ## Selection
 
 Selecting an element opens a side panel (drawer) without leaving the

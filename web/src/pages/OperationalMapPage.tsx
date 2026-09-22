@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { ChevronDown, LayersIcon, MapIcon, Search } from "lucide-react"
 import { getServices } from "@/services"
 import type { MapaOperativoResultado } from "@/services/layoutService"
-import type { TruckRow } from "@/types"
+import type { TransportCompanyRow, TruckRow } from "@/types"
 import { ROUTES } from "@/config/routes"
 import { useFacilityId } from "@/hooks/useFacilityId"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
+import { useAuth } from "@/integrations/auth/useAuth"
 import { derivarEstadoCamion, type TruckDisplayStatus } from "@/components/trucks/truckStatus"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { LoadingState } from "@/components/shared/LoadingState"
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { OperationalCanvas } from "@/components/map/operational/OperationalCanvas"
+import { TruckFinderPanel } from "@/components/map/operational/TruckFinderPanel"
 import { LocationDetailDrawer } from "@/components/map/operational/LocationDetailDrawer"
 import {
   derivarEstadoOperativo,
@@ -39,9 +41,12 @@ const FILTROS_INICIALES: Filtros = { tipo: "todos", estado: "todos", busqueda: "
 
 export function OperationalMapPage() {
   const navigate = useNavigate()
+  const { hasPermission } = useAuth()
+  const puedeLeerCamiones = hasPermission("truck.read")
   const { facilityId, loading: facilityLoading } = useFacilityId()
   const [resultado, setResultado] = useState<MapaOperativoResultado | null>(null)
   const [camiones, setCamiones] = useState<TruckRow[]>([])
+  const [companias, setCompanias] = useState<TransportCompanyRow[]>([])
   const [estadosCamion, setEstadosCamion] = useState<Record<string, TruckDisplayStatus>>({})
   const [locsConHold, setLocsConHold] = useState<ReadonlySet<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -52,6 +57,7 @@ export function OperationalMapPage() {
   const [leyendaAbierta, setLeyendaAbierta] = useState(true)
 
   const [seleccionId, setSeleccionId] = useState<string | null>(null)
+  const [truckFocusedId, setTruckFocusedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!facilityId) return
@@ -61,24 +67,40 @@ export function OperationalMapPage() {
       setError(null)
       try {
         const services = getServices()
-        const [mapa, conHold, trucks] = await Promise.all([
+        const [mapa, conHold] = await Promise.all([
           services.layouts.obtenerMapaOperativo(facilityId),
           services.layouts.ubicacionesConHoldAbierto(facilityId),
-          services.trucks.listar({ estado: "in_playon" }),
         ])
         if (cancelled) return
-        // Derived-status per truck (T-21): same badges the trucks module
-        // shows, so the playón chips are not a second, weaker vocabulary.
+        let camionesTodos: TruckRow[] = []
+        let companiasRow: TransportCompanyRow[] = []
         const estados: Record<string, TruckDisplayStatus> = {}
-        if (trucks.length > 0) {
-          const señales = await services.trucks.obtenerSeñales(trucks.map((t) => t.id))
-          for (let i = 0; i < trucks.length; i += 1) {
-            estados[trucks[i].id] = derivarEstadoCamion(trucks[i], señales[i])
+        // The map route only needs warehouse.read; the truck surface
+        // (chips + finder panel) is truck.read. Never fetch rows the
+        // caller cannot read — the demo adapter mirrors RLS by throwing.
+        if (puedeLeerCamiones) {
+          const [trucks, companiasData] = await Promise.all([
+            services.trucks.listar(),
+            services.trucks.listarCompanias(),
+          ])
+          if (cancelled) return
+          camionesTodos = trucks
+          companiasRow = companiasData
+          // Derived-status per truck (T-21): same badges the trucks module
+          // shows, so the playón chips and finder rows are not a second,
+          // weaker vocabulary. Bounded: one signals call for all rows.
+          if (trucks.length > 0) {
+            const señales = await services.trucks.obtenerSeñales(trucks.map((t) => t.id))
+            if (cancelled) return
+            for (let i = 0; i < trucks.length; i += 1) {
+              estados[trucks[i].id] = derivarEstadoCamion(trucks[i], señales[i])
+            }
           }
         }
         if (cancelled) return
         setResultado(mapa)
-        setCamiones(trucks)
+        setCamiones(camionesTodos)
+        setCompanias(companiasRow)
         setEstadosCamion(estados)
         setLocsConHold(new Set(conHold))
       } catch (cause) {
@@ -91,7 +113,7 @@ export function OperationalMapPage() {
     return () => {
       cancelled = true
     }
-  }, [facilityId])
+  }, [facilityId, puedeLeerCamiones])
 
   const elementosConEstado = useMemo<ElementoConEstado[]>(
     () =>
@@ -123,6 +145,19 @@ export function OperationalMapPage() {
   const seleccion = useMemo(
     () => elementosConEstado.find((e) => e.elemento.id === seleccionId) ?? null,
     [elementosConEstado, seleccionId],
+  )
+
+  // Chips on the canvas only render trucks parked on the playón; the finder
+  // panel lists the FULL catalog (camiones).
+  const camionesEnPlayon = useMemo(() => camiones.filter((t) => t.status === "in_playon"), [camiones])
+
+  // Clicking a finder row only marks the truck on the map (chip ring +
+  // viewport centered); the separate "Ver detalle" button navigates.
+  const seleccionarCamion = useCallback((id: string) => setTruckFocusedId(id), [])
+
+  const verDetalleCamion = useCallback(
+    (id: string) => navigate(`${ROUTES.trucks}/${id}`),
+    [navigate],
   )
 
   if (facilityLoading || (facilityId && loading && !resultado)) {
@@ -243,41 +278,59 @@ export function OperationalMapPage() {
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1">
-        {resultadoFiltrado ? (
-          <OperationalCanvas
-            resultado={resultadoFiltrado}
-            ubicacionesConHoldAbierto={locsConHold}
-            camionesEnPlayon={camiones}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+        <div className="min-h-0 flex-1">
+          {resultadoFiltrado ? (
+            <OperationalCanvas
+              resultado={resultadoFiltrado}
+              ubicacionesConHoldAbierto={locsConHold}
+              camionesEnPlayon={camionesEnPlayon}
+              estadosCamion={estadosCamion}
+              onSeleccionar={(e) => setSeleccionId(e.elemento.id)}
+              onSeleccionarCamion={seleccionarCamion}
+              focusedTruckId={truckFocusedId}
+            />
+          ) : (
+            <EmptyState
+              icon={<MapIcon className="size-6" />}
+              title="Todavía no hay un layout publicado"
+              description="Creá el primer plano de la facilidad y publicá una versión para que aparezca en el mapa operativo."
+              action={
+                <div className="flex gap-2">
+                  <Link to="/settings/layouts">
+                    <Button size="sm">Crear primer layout</Button>
+                  </Link>
+                  <Link to="/settings/layouts">
+                    <Button variant="outline" size="sm">
+                      Ver borradores
+                    </Button>
+                  </Link>
+                </div>
+              }
+            />
+          )}
+        </div>
+
+        {/* truck.read surface (the map route is warehouse.read): hidden
+            entirely when the caller cannot read trucks. */}
+        {puedeLeerCamiones ? (
+          <TruckFinderPanel
+            className="h-80 shrink-0 md:h-auto md:w-80 md:self-stretch"
+            camiones={camiones}
             estadosCamion={estadosCamion}
-            onSeleccionar={(e) => setSeleccionId(e.elemento.id)}
-            onSeleccionarCamion={(id) => navigate(`${ROUTES.trucks}/${id}`)}
+            companias={companias}
+            camionesEnPlayonIds={new Set(camionesEnPlayon.map((t) => t.id))}
+            truckFocusedId={truckFocusedId}
+            onSeleccionarCamion={seleccionarCamion}
+            onVerDetalle={verDetalleCamion}
           />
-        ) : (
-          <EmptyState
-            icon={<MapIcon className="size-6" />}
-            title="Todavía no hay un layout publicado"
-            description="Creá el primer plano de la facilidad y publicá una versión para que aparezca en el mapa operativo."
-            action={
-              <div className="flex gap-2">
-                <Link to="/settings/layouts">
-                  <Button size="sm">Crear primer layout</Button>
-                </Link>
-                <Link to="/settings/layouts">
-                  <Button variant="outline" size="sm">
-                    Ver borradores
-                  </Button>
-                </Link>
-              </div>
-            }
-          />
-        )}
+        ) : null}
       </div>
 
       <LocationDetailDrawer
         elemento={seleccion}
         estado={seleccion?.estado ?? null}
-        camionesEnPlayon={camiones}
+        camionesEnPlayon={camionesEnPlayon}
         open={seleccion !== null}
         onOpenChange={(open) => {
           if (!open) setSeleccionId(null)

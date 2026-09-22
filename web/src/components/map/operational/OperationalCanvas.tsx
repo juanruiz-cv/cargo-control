@@ -29,6 +29,11 @@ export interface OperationalCanvasProps {
   onSeleccionar: (elemento: LayoutElementConUbicacion) => void
   /** Navigate to a truck detail from a playón chip. */
   onSeleccionarCamion?: (truckId: string) => void
+  /**
+   * Truck to focus: centers the viewport on its chip (zoom kept >= 1)
+   * and rings the chip while selected (truck finder panel).
+   */
+  focusedTruckId?: string | null
 }
 
 interface ElementoRender extends LayoutElementConUbicacion {
@@ -57,6 +62,7 @@ export function OperationalCanvas({
   estadosCamion,
   onSeleccionar,
   onSeleccionarCamion,
+  focusedTruckId,
 }: OperationalCanvasProps) {
   const bounds = calcularBounds(resultado)
   const { containerRef, viewport, setViewport, zoomIn, zoomOut, fit, atMinZoom, atMaxZoom } =
@@ -64,6 +70,38 @@ export function OperationalCanvas({
   const [hovered, setHovered] = useState<ElementoRender | null>(null)
   const [tooltip, setTooltip] = useState<{ x: number; y: number } | null>(null)
   const dragRef = useRef<{ startX: number; startY: number; vp: Viewport } | null>(null)
+
+  // Latest viewport for the focus effect (reading `viewport` directly would
+  // re-center on every pan — we only want to react to focusedTruckId).
+  const viewportRef = useRef(viewport)
+  useEffect(() => {
+    viewportRef.current = viewport
+  }, [viewport])
+
+  // Focus a truck chip (truck finder panel): pan/zoom so the chip lands at
+  // the container center, keeping zoom >= 1 (1.2 when at or below 100%).
+  // Chips live inside the translated world layer AND carry their own
+  // docToScreen offset, so rendered position = doc * zoom + 2 * viewport
+  // offset; the centering math mirrors that structure.
+  useEffect(() => {
+    if (!focusedTruckId) return
+    const el = containerRef.current
+    if (!el) return
+    const chip = el.querySelector<HTMLElement>(`[data-truck-chip="${focusedTruckId}"]`)
+    if (!chip) return
+    const rect = el.getBoundingClientRect()
+    const chipRect = chip.getBoundingClientRect()
+    const vp = viewportRef.current
+    const chipX = chipRect.left - rect.left + chipRect.width / 2
+    const chipY = chipRect.top - rect.top + chipRect.height / 2
+    const targetZoom = vp.zoom >= 1 ? vp.zoom : 1.2
+    const ratio = targetZoom / vp.zoom
+    setViewport({
+      zoom: targetZoom,
+      x: (rect.width / 2 - (chipX - 2 * vp.x) * ratio) / 2,
+      y: (rect.height / 2 - (chipY - 2 * vp.y) * ratio) / 2,
+    })
+  }, [focusedTruckId, containerRef, setViewport])
 
   // Initial position: 100% zoom, document origin pinned to the left edge
   // (desktop-first doctrine). The Fit action is still available in the
@@ -216,16 +254,19 @@ export function OperationalCanvas({
             >
               {camionesEnPlayon.map((truck) => {
                 const estado = estadosCamion?.[truck.id] ?? "in_playon"
+                const enfocado = focusedTruckId === truck.id
                 return (
                   <button
                     key={truck.id}
                     type="button"
+                    data-truck-chip={truck.id}
                     title={`${truck.plate} — ${TRUCK_DISPLAY_STATUS_LABELS[estado]}`}
                     onClick={() => onSeleccionarCamion?.(truck.id)}
                     className={cn(
                       "flex w-fit cursor-pointer items-center gap-1 rounded-full border px-1.5 py-px text-[11px] leading-4 font-medium shadow-xs transition-colors",
                       "hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring",
                       TRUCK_DISPLAY_STATUS_CLASS[estado],
+                      enfocado && "ring-2 ring-ring ring-offset-2 ring-offset-background",
                     )}
                   >
                     <Truck className="size-3 shrink-0" />
