@@ -204,10 +204,11 @@ export function OperationalCanvas({
             )
           })}
 
-          {/* Camiones en playón */}
+          {/* Camiones en playón — one horizontal row pinned under the playon,
+              wrapping only when the row overflows the sector width. */}
           {playon && playonScreen && camionesEnPlayon.length > 0 ? (
             <div
-              className="absolute flex flex-col gap-1"
+              className="absolute flex max-w-[240px] flex-row flex-wrap items-start gap-1"
               style={{
                 left: playonScreen.x,
                 top: playonScreen.y + (playon.elemento.visual_height ?? 40) * viewport.zoom + 4,
@@ -222,12 +223,12 @@ export function OperationalCanvas({
                     title={`${truck.plate} — ${TRUCK_DISPLAY_STATUS_LABELS[estado]}`}
                     onClick={() => onSeleccionarCamion?.(truck.id)}
                     className={cn(
-                      "group flex w-fit cursor-pointer items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium shadow-sm transition-colors",
-                      "hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring",
+                      "flex w-fit cursor-pointer items-center gap-1 rounded-full border px-1.5 py-px text-[11px] leading-4 font-medium shadow-xs transition-colors",
+                      "hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring",
                       TRUCK_DISPLAY_STATUS_CLASS[estado],
                     )}
                   >
-                    <Truck className="size-3.5 shrink-0" />
+                    <Truck className="size-3 shrink-0" />
                     {truck.plate}
                   </button>
                 )
