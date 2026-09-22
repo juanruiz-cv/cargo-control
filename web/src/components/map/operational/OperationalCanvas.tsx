@@ -154,9 +154,6 @@ export function OperationalCanvas({
     dragRef.current = null
   }, [])
 
-  const playon = resultado.elementos.find((e) => e.elemento.element_type === "playon")
-  const playonScreen = playon ? docToScreen(viewport, playon.elemento.x, playon.elemento.y) : null
-
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border bg-muted/20 select-none">
       <div
@@ -238,44 +235,42 @@ export function OperationalCanvas({
                     style={{ backgroundColor: estadoMeta.color }}
                   />
                 ) : null}
+
+                {/* Camiones en playón — one horizontal row INSIDE the playón
+                    sector (bottom edge), wrapping only when the row overflows
+                    the sector width; clipped by the sector box. */}
+                {dato.elemento.element_type === "playon" && camionesEnPlayon.length > 0 ? (
+                  <div className="absolute inset-x-1 bottom-1 z-10 flex max-h-[50%] flex-wrap justify-center gap-1 overflow-hidden">
+                    {camionesEnPlayon.map((truck) => {
+                      const estado = estadosCamion?.[truck.id] ?? "in_playon"
+                      const enfocado = focusedTruckId === truck.id
+                      return (
+                        <button
+                          key={truck.id}
+                          type="button"
+                          data-truck-chip={truck.id}
+                          title={`${truck.plate} — ${TRUCK_DISPLAY_STATUS_LABELS[estado]}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onSeleccionarCamion?.(truck.id)
+                          }}
+                          className={cn(
+                            "flex w-fit cursor-pointer items-center gap-1 rounded-full border px-1.5 py-px text-[11px] leading-4 font-medium shadow-xs transition-colors",
+                            "hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring",
+                            TRUCK_DISPLAY_STATUS_CLASS[estado],
+                            enfocado && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+                          )}
+                        >
+                          <Truck className="size-3 shrink-0" />
+                          {truck.plate}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : null}
               </div>
             )
           })}
-
-          {/* Camiones en playón — one horizontal row pinned under the playon,
-              wrapping only when the row overflows the sector width. */}
-          {playon && playonScreen && camionesEnPlayon.length > 0 ? (
-            <div
-              className="absolute flex max-w-[240px] flex-row flex-wrap items-start gap-1"
-              style={{
-                left: playonScreen.x,
-                top: playonScreen.y + (playon.elemento.visual_height ?? 40) * viewport.zoom + 4,
-              }}
-            >
-              {camionesEnPlayon.map((truck) => {
-                const estado = estadosCamion?.[truck.id] ?? "in_playon"
-                const enfocado = focusedTruckId === truck.id
-                return (
-                  <button
-                    key={truck.id}
-                    type="button"
-                    data-truck-chip={truck.id}
-                    title={`${truck.plate} — ${TRUCK_DISPLAY_STATUS_LABELS[estado]}`}
-                    onClick={() => onSeleccionarCamion?.(truck.id)}
-                    className={cn(
-                      "flex w-fit cursor-pointer items-center gap-1 rounded-full border px-1.5 py-px text-[11px] leading-4 font-medium shadow-xs transition-colors",
-                      "hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring",
-                      TRUCK_DISPLAY_STATUS_CLASS[estado],
-                      enfocado && "ring-2 ring-ring ring-offset-2 ring-offset-background",
-                    )}
-                  >
-                    <Truck className="size-3 shrink-0" />
-                    {truck.plate}
-                  </button>
-                )
-              })}
-            </div>
-          ) : null}
         </div>
       </div>
 
