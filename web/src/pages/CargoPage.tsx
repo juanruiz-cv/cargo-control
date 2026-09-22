@@ -1,13 +1,19 @@
-import { ClipboardListIcon } from "lucide-react"
+import { useParams } from "react-router-dom"
 
-import { ModuleStubPage } from "@/components/shared/ModuleStubPage"
+import { ManifestDetailPage } from "@/components/cargo/ManifestDetailPage"
+import { ManifestList } from "@/components/cargo/ManifestList"
 
+/**
+ * Cargo module shell. Both /cargo and /cargo/:id land here (routes
+ * registry → CargoPage); the param decides list vs details. NOTE:
+ * /cargo/items/:itemId is declared in cargo-module.md but was NOT
+ * registered by the scaffold — per-lot history arrives later (documented
+ * pending; the detail page covers lots now).
+ */
 export function CargoPage() {
-  return (
-    <ModuleStubPage
-      module="Cargamentos"
-      description="Manifiestos, ítems y trazabilidad de mercadería (Fase 8)."
-      icon={ClipboardListIcon}
-    />
-  )
+  const { id } = useParams()
+  if (id) {
+    return <ManifestDetailPage manifestId={id} />
+  }
+  return <ManifestList />
 }

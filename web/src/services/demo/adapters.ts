@@ -133,7 +133,11 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
-let idCounter = 0
+// Counter base above the seed ids (seed.ts uses fixed ids like
+// manifest-1/item-1-1/lot-1-1): starting from 0 would collide with the
+// seed and make obtenerManifest resolve the WRONG manifest (find → first
+// match). 100_000 keeps generated ids unique for any realistic session.
+let idCounter = 100_000
 
 /** Stable, unique-per-store demo id (no colons/brackets). */
 function demoId(prefix: string): string {
@@ -558,6 +562,17 @@ class DemoCargoService implements CargoService {
     if (filtros?.until) rows = rows.filter((m) => m.created_at < filtros.until!)
     rows = [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at))
     return clone(applyLimit(rows, filtros))
+  }
+
+  async contarManifests(filtros?: ManifestFiltros): Promise<number> {
+    requirePermission(this.state, "cargo.read", "contar manifiestos")
+    let rows = this.state.manifests
+    if (filtros?.estado) rows = rows.filter((m) => m.status === filtros.estado)
+    if (filtros?.facilidadId) rows = rows.filter((m) => m.facility_id === filtros.facilidadId)
+    if (filtros?.camionId) rows = rows.filter((m) => m.truck_id === filtros.camionId)
+    if (filtros?.since) rows = rows.filter((m) => m.created_at >= filtros.since!)
+    if (filtros?.until) rows = rows.filter((m) => m.created_at < filtros.until!)
+    return rows.length
   }
 
   async obtenerManifest(id: string): Promise<{

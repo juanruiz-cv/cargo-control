@@ -87,6 +87,8 @@ export interface DescargaInput extends MovementExecutionInput {
 
 export interface CargoService {
   listarManifests(filtros?: ManifestFiltros): Promise<CargoManifestRow[]>
+  /** Exact count for the same filters — ONLY on full-page condition (ADR 0008 §4). */
+  contarManifests(filtros?: ManifestFiltros): Promise<number>
   obtenerManifest(id: string): Promise<ManifestDetail | null>
   crearManifest(datos: ManifestInsert): Promise<CargoManifestRow>
   listarItems(manifestId: string): Promise<CargoItemRow[]>
@@ -129,6 +131,21 @@ export class SupabaseCargoService implements CargoService {
     const { data, error } = await query
     if (error) throw new Error(`cargo_manifests: ${error.message}`)
     return (data ?? []) as CargoManifestRow[]
+  }
+
+  async contarManifests(filtros?: ManifestFiltros): Promise<number> {
+    const client = requireClient(this.client)
+    let query = client.from("cargo_manifests").select("id", { count: "exact", head: true })
+
+    if (filtros?.estado) query = query.eq("status", filtros.estado)
+    if (filtros?.facilidadId) query = query.eq("facility_id", filtros.facilidadId)
+    if (filtros?.camionId) query = query.eq("truck_id", filtros.camionId)
+    if (filtros?.since) query = query.gte("created_at", filtros.since)
+    if (filtros?.until) query = query.lt("created_at", filtros.until)
+
+    const { count, error } = await query
+    if (error) throw new Error(`cargo_manifests count: ${error.message}`)
+    return count ?? 0
   }
 
   async obtenerManifest(id: string): Promise<ManifestDetail | null> {
