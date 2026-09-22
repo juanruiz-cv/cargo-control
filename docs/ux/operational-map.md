@@ -39,9 +39,21 @@ Each element card/badge shows:
 - **ocupación** — e.g. `1.2 t / 2 t · 60%` (kg/volume/units as known)
 - **capacidad** — per dimension; `∞` when NULL (unlimited)
 
-Playón renders **truck chips** at their lane positions when known
-(otherwise grouped in a "Camiones en playón" cluster): plate + state
-badge; click selects the truck.
+Playón renders **truck chips** for every truck whose cargo is on site.
+The chip is drawn INSIDE the sector that owns the truck's current derived
+state, not only the playón:
+
+- **Playón** — trucks waiting/available with cargo on the truck;
+- **Balanza** — truck's lots are at a scale checkpoint (`in_scale`);
+- **Scanner** — truck's lots are at a scan checkpoint (`in_scanner`);
+- **Rezago** — truck has an open quarantine hold (`retained`);
+- **Secuestro** — truck has an open seizure (`seized`);
+
+Each chip = plate + state badge; click selects the truck. Chips render
+only when the published layout HAS that sector type; otherwise the truck
+falls back to the playón. Within the owning sector, chips use a
+column-fill layout: top-left corner, stacking vertically until the column
+fills the sector height, then wrapping into the next column to the right.
 
 ## Truck finder panel (right)
 

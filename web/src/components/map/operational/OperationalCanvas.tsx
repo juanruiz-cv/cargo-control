@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Truck } from "lucide-react"
 import type { LayoutElementConUbicacion, MapaOperativoResultado } from "@/services/layoutService"
-import type { TruckRow } from "@/types"
+import type { LayoutElementType, TruckRow } from "@/types"
 import { useViewport } from "@/hooks/useViewport"
 import { docToScreen, pan, zoomAtPoint, wheelZoomFactor, type Viewport } from "@/lib/viewport"
 import { cn } from "cn"
@@ -19,6 +19,54 @@ import {
 } from "@/components/map/shared/estadoOperativo"
 import { EstadoOperativoBadge } from "@/components/map/shared/EstadoOperativoBadge"
 import { ZoomControls } from "@/components/map/shared/ZoomControls"
+
+/** Sector element type where a truck's cargo is being processed (docs/ux/operational-map.md). */
+const SECTOR_POR_ESTADO: Partial<Record<TruckDisplayStatus, LayoutElementType>> = {
+  retained: "quarantine",
+  seized: "seizure",
+  in_scanner: "scanner",
+  in_scale: "scale",
+}
+
+interface TruckChipRowProps {
+  camiones: TruckRow[]
+  estadosCamion?: Record<string, TruckDisplayStatus>
+  focusedTruckId?: string | null
+  onSeleccionarCamion?: (truckId: string) => void
+}
+
+/** Column-fill truck chips pinned inside their owning sector box. */
+function TruckChipRow({ camiones, estadosCamion, focusedTruckId, onSeleccionarCamion }: TruckChipRowProps) {
+  return (
+    <div className="absolute inset-1 z-10 flex flex-col flex-wrap content-start items-start justify-start gap-1 overflow-hidden">
+      {camiones.map((truck) => {
+        const estado = estadosCamion?.[truck.id] ?? "in_playon"
+        const enfocado = focusedTruckId === truck.id
+        return (
+          <button
+            key={truck.id}
+            type="button"
+            data-truck-chip={truck.id}
+            title={`${truck.plate} — ${TRUCK_DISPLAY_STATUS_LABELS[estado]}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onSeleccionarCamion?.(truck.id)
+            }}
+            className={cn(
+              "flex w-fit cursor-pointer items-center gap-1 rounded-full border px-1.5 py-px text-[11px] leading-4 font-medium shadow-xs transition-colors",
+              "hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring",
+              TRUCK_DISPLAY_STATUS_CLASS[estado],
+              enfocado && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+            )}
+          >
+            <Truck className="size-3 shrink-0" />
+            {truck.plate}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 export interface OperationalCanvasProps {
   resultado: MapaOperativoResultado
@@ -114,6 +162,26 @@ export function OperationalCanvas({
     if (!el) return
     setViewport({ zoom: 1, x: 0, y: 0 })
   }, [containerRef, setViewport])
+
+  // Group playón trucks by the sector where their cargo is being processed:
+  // the chip follows the derived state (retained → rezago, seized →
+  // secuestro, in_scanner → scanner, in_scale → balanza), falling back to
+  // the playón. Chips only render where the published layout HAS that
+  // sector type — otherwise the truck stays on the playón.
+  const tiposDeSector = useMemo(
+    () => new Set(resultado.elementos.map((e) => e.elemento.element_type)),
+    [resultado],
+  )
+  const camionesPorSector = useMemo(() => {
+    const porSector: Partial<Record<LayoutElementType, TruckRow[]>> = {}
+    for (const truck of camionesEnPlayon) {
+      const estado = estadosCamion?.[truck.id] ?? truck.status
+      const destino = SECTOR_POR_ESTADO[estado] ?? "playon"
+      const sector = destino === "playon" || tiposDeSector.has(destino) ? destino : "playon"
+      ;(porSector[sector] ??= []).push(truck)
+    }
+    return porSector
+  }, [camionesEnPlayon, estadosCamion, tiposDeSector])
 
   // Wheel zoom at cursor — native non-passive listener (React wheel is passive).
   useEffect(() => {
@@ -236,38 +304,51 @@ export function OperationalCanvas({
                   />
                 ) : null}
 
-                {/* Camiones en playón — column-fill layout INSIDE the playón sector:
-                    starts at the top-left corner, stacks vertically until
-                    the column fills the sector height, then wraps into the
-                    next column to the right. */}
-                {dato.elemento.element_type === "playon" && camionesEnPlayon.length > 0 ? (
-                  <div className="absolute inset-1 z-10 flex flex-col flex-wrap content-start items-start justify-start gap-1 overflow-hidden">
-                    {camionesEnPlayon.map((truck) => {
-                      const estado = estadosCamion?.[truck.id] ?? "in_playon"
-                      const enfocado = focusedTruckId === truck.id
-                      return (
-                        <button
-                          key={truck.id}
-                          type="button"
-                          data-truck-chip={truck.id}
-                          title={`${truck.plate} — ${TRUCK_DISPLAY_STATUS_LABELS[estado]}`}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onSeleccionarCamion?.(truck.id)
-                          }}
-                          className={cn(
-                            "flex w-fit cursor-pointer items-center gap-1 rounded-full border px-1.5 py-px text-[11px] leading-4 font-medium shadow-xs transition-colors",
-                            "hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring",
-                            TRUCK_DISPLAY_STATUS_CLASS[estado],
-                            enfocado && "ring-2 ring-ring ring-offset-2 ring-offset-background",
-                          )}
-                        >
-                          <Truck className="size-3 shrink-0" />
-                          {truck.plate}
-                        </button>
-                      )
-                    })}
-                  </div>
+                {/* Camiones en playón — column-fill layout INSIDE the sector that owns
+                    the truck's current derived state: playón, balanza,
+                    scanner, rezago or secuestro. Starts at the top-left
+                    corner, stacks vertically until the column fills the
+                    sector height, then wraps into the next column to the
+                    right. */}
+                {dato.elemento.element_type === "playon" && camionesPorSector.playon?.length ? (
+                  <TruckChipRow
+                    camiones={camionesPorSector.playon}
+                    estadosCamion={estadosCamion}
+                    focusedTruckId={focusedTruckId}
+                    onSeleccionarCamion={onSeleccionarCamion}
+                  />
+                ) : null}
+                {dato.elemento.element_type === "scale" && camionesPorSector.scale?.length ? (
+                  <TruckChipRow
+                    camiones={camionesPorSector.scale}
+                    estadosCamion={estadosCamion}
+                    focusedTruckId={focusedTruckId}
+                    onSeleccionarCamion={onSeleccionarCamion}
+                  />
+                ) : null}
+                {dato.elemento.element_type === "scanner" && camionesPorSector.scanner?.length ? (
+                  <TruckChipRow
+                    camiones={camionesPorSector.scanner}
+                    estadosCamion={estadosCamion}
+                    focusedTruckId={focusedTruckId}
+                    onSeleccionarCamion={onSeleccionarCamion}
+                  />
+                ) : null}
+                {dato.elemento.element_type === "quarantine" && camionesPorSector.quarantine?.length ? (
+                  <TruckChipRow
+                    camiones={camionesPorSector.quarantine}
+                    estadosCamion={estadosCamion}
+                    focusedTruckId={focusedTruckId}
+                    onSeleccionarCamion={onSeleccionarCamion}
+                  />
+                ) : null}
+                {dato.elemento.element_type === "seizure" && camionesPorSector.seizure?.length ? (
+                  <TruckChipRow
+                    camiones={camionesPorSector.seizure}
+                    estadosCamion={estadosCamion}
+                    focusedTruckId={focusedTruckId}
+                    onSeleccionarCamion={onSeleccionarCamion}
+                  />
                 ) : null}
               </div>
             )
