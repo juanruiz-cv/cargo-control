@@ -105,7 +105,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T10 | Movement engine: 15 kinds, transactional service, operation_key idempotency, guards (I1-I7), audit wiring | delegated | done (7dbd8cd; lib/movement-guards.ts puro I1-I7, RegistrarMovimientoDialog, movementService ejecutarMovimiento con op_key replay, corrección con previous_movement_id; bug real fixeado: I6_LOTES_RETENIDOS no-op en egress → contexto carga todos los lotes del manifest; 23/23 runtime + 7/7 demo PASS; risk medium; build+lint+tsc pass) |
 | T11 | Scanner / Balanza / Rezago / Secuestro modules (queues, operations, holds, seizure workflow, attachments) | delegated | done (86806be) |
 | T12 | Dashboard: real aggregates (queries with aggregation, not full history to browser) | delegated | done (b17b1a7) |
-| T13 | Audit module: AuditLog list/details/filters/timeline, read-only for normal users | delegated | done (pendiente commit feature) |
+| T13 | Audit module: AuditLog list/details/filters/timeline, read-only for normal users | delegated | done (e86b535) |
 | T14 | Reports: truck/entries/exits/cargo/movements/occupancy/scanner/scale/quarantine/seizure/audit, filters + CSV export | delegated | pending |
 | T15 | Responsive: desktop-first, tablet (icon rail, data preserved, write path identical), breakpoints via tokens | delegated | pending |
 | T16 | SEO: public pages only (/, /login, /about, /help, /contact), robots.txt, sitemap, OG, noindex internal routes | delegated | pending |
