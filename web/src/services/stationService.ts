@@ -182,8 +182,11 @@ class SupabaseScannerStationService implements ScannerStationService {
       .single()
     if (opError) throw new Error(`scanner_operations insert: ${opError.message}`)
 
-    // scan_in marks the lot checked (states.md); scan_out does not change status.
-    if (kind === "scan_in") {
+    // scan_in marks the lot checked (states.md); scan_out does not change
+    // status. Non-success captures (not_found/ambiguous/error) still write
+    // the append-only row but DO NOT advance the lot — it stays pending in
+    // the station queue (SBF-05; station_queue keeps only result='success').
+    if (kind === "scan_in" && (input.result ?? "success") === "success") {
       const { error: lotError } = await client
         .from("item_lots")
         .update({ status: "checked" })

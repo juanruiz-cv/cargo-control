@@ -1,13 +1,10 @@
-import { AlertTriangleIcon } from "lucide-react"
+import { HoldModulePage } from "@/components/special-areas/HoldModulePage"
 
-import { ModuleStubPage } from "@/components/shared/ModuleStubPage"
-
+/**
+ * Rezago (quarantine holds) module shell — special-areas.md §REZAGO.
+ * /quarantine and /quarantine/:id land here; the param is not used yet
+ * (routes registry → QuarantinePage).
+ */
 export function QuarantinePage() {
-  return (
-    <ModuleStubPage
-      module="Rezago"
-      description="Casos de rezago y su resolución supervisada (Fase 10)."
-      icon={AlertTriangleIcon}
-    />
-  )
+  return <HoldModulePage kind="quarantine" />
 }

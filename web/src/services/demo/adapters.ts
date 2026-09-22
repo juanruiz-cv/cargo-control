@@ -33,6 +33,7 @@ import type {
   HoldService,
 } from "@/services/holdService"
 import type { QuarantineOpenInput, SeizureOpenInput, HoldResolveInput } from "@/services/holdService"
+import type { HoldOpenRow } from "@/types"
 import type { QuarantineHoldService, SeizureHoldService } from "@/services/holdService"
 import type { LocationService } from "@/services/locationService"
 import {
@@ -246,13 +247,6 @@ function findManifest(state: DemoState, manifestId: string): CargoManifestRow {
   const manifest = state.manifests.find((m) => m.id === manifestId)
   if (!manifest) throw demoError(`manifiesto ${manifestId} no encontrado`)
   return manifest
-}
-
-function assertLocationAccepts(state: DemoState, locationId?: string): void {
-  if (!locationId) return
-  const location = findLocation(state, locationId)
-  if (!location.active) throw demoError(`la location ${locationId} está inactiva`)
-  if (!location.allows_hold) throw demoError(`la location ${locationId} no permite holds (allows_hold=false)`)
 }
 
 // ---------------------------------------------------------------------
@@ -568,9 +562,10 @@ class DemoMovementService implements MovementService {
   /**
    * In-memory mutation per kind (flows.md transitions + legacy rollups).
    * Audit rows use the audit.md CATALOG actions (movement.* / operation.* /
-   * truck.*); the seed and the legacy cargo/hold flows still emit
-   * `cargo.discharge` / `quarantine.create` / `seizure.create` — a known
-   * deviation that this work does not touch.
+   * truck.*). Legacy deviations that this work does not touch: the seed
+   * helpers emit `cargo.discharge`, and `quarantine.create` / `seizure.create`
+   * were replaced by the engine path (read-only audits emitted by
+   * `operation.quarantine` / `operation.seizure` — see ejecutarDemo cases).
    */
   private ejecutarDemo(input: CreateMovementInput): MovementRow {
     const state = this.state
@@ -1473,7 +1468,10 @@ class DemoScannerStationService implements ScannerStationService {
       locationId: lot.current_location_id,
       items: [{ itemLotId: lot.id, cantidad: lot.quantity, destinoLocationId: lot.current_location_id }],
     })
-    if (input.kind !== "scan_out") {
+    // Non-success captures (not_found/ambiguous/error) still write the
+    // append-only row but DO NOT advance the lot (SBF-05): it stays pending
+    // in the station queue until a success result.
+    if (input.kind !== "scan_out" && (input.result ?? "success") === "success") {
       lot.status = "checked"
       lot.updated_at = nowIso()
     }
@@ -1516,11 +1514,24 @@ class DemoStationService implements StationService {
       const queueKind = checkpoint.checkpoint_kind === "scan" ? "scan" : checkpoint.checkpoint_kind === "scale" ? "scale" : null
       if (!queueKind) continue
       if (kind && queueKind !== kind) continue
-      // Pending = no operation row exists for this lot (any ok'd scan/scale of the placement).
+      // Pending = no COMPLETED operation for the placement, mirroring the
+      // station_queue view semantics (0005_views.sql v6): the latest
+      // movement_item that placed the lot at its current checkpoint must
+      // carry a scanner op with result='success' (scan) / a scale op with
+      // within_tolerance=true (scale). Non-success results keep the lot
+      // pending (SBF-05 / SBF-08).
+      const placement = [...this.state.movementItems]
+        .reverse()
+        .find((mi) => mi.item_lot_id === lot.id && mi.to_location_id === lot.current_location_id)
       const done =
-        queueKind === "scan"
-          ? this.state.scannerOps.some((o) => o.item_lot_id === lot.id)
-          : this.state.scaleOps.some((o) => o.item_lot_id === lot.id)
+        placement !== undefined &&
+        (queueKind === "scan"
+          ? this.state.scannerOps.some(
+              (o) => o.movement_id === placement.movement_id && o.result === "success",
+            )
+          : this.state.scaleOps.some(
+              (o) => o.movement_id === placement.movement_id && o.within_tolerance === true,
+            ))
       if (done) continue
       const manifest = findManifest(this.state, lot.manifest_id)
       const item = this.state.items.find((i) => i.id === lot.cargo_item_id)
@@ -1552,9 +1563,11 @@ class DemoStationService implements StationService {
 
 class DemoQuarantineHoldService implements QuarantineHoldService {
   private readonly state: DemoState
+  private readonly movements: DemoMovementService
 
-  constructor(state: DemoState) {
+  constructor(state: DemoState, movements: DemoMovementService) {
     this.state = state
+    this.movements = movements
   }
 
   async listar(filtros?: QuarantineHoldFiltros): Promise<QuarantineOperationRow[]> {
@@ -1573,89 +1586,73 @@ class DemoQuarantineHoldService implements QuarantineHoldService {
     requirePermission(this.state, "quarantine.create", "abrir rezago")
     if (!input.reason.trim()) throw demoError("el motivo (reason) es obligatorio para abrir un rezago")
     if (!input.operatorId) throw demoError("operatorId es obligatorio al abrir un rezago (opened_by NOT NULL)")
-    assertLocationAccepts(this.state, input.locationId)
     const lot = findLot(this.state, input.itemLotId)
-    if (lot.status === "seized" || lot.status === "in_quarantine") {
-      throw demoError(`el lote ${lot.id} ya está retenido (${lot.status})`)
-    }
-    const destination = input.locationId ?? lot.current_location_id ?? "loc-rezago"
-    const movement = createDemoMovement(this.state, {
+
+    // Spec §5: opening a hold IS the engine command (guards I1..I7 +
+    // whole-lot freeze + append-only op row + audit). The engine creates
+    // the quarantine_operations row; never insert a second one.
+    const resultado = await this.movements.ejecutarMovimiento({
       kind: "quarantine",
       manifestId: lot.manifest_id,
       operatorId: input.operatorId,
       ocurridoEn: input.ocurridoEn,
       operationKey: input.operationKey,
       motivo: input.reason,
-      locationId: destination,
+      locationId: input.locationId ?? lot.current_location_id,
       items: [
         {
           itemLotId: lot.id,
           cantidad: lot.quantity,
           origenLocationId: lot.current_location_id,
-          destinoLocationId: destination,
+          destinoLocationId: input.locationId ?? lot.current_location_id,
           notas: input.notas,
         },
       ],
     })
-    lot.status = "in_quarantine"
-    lot.current_location_id = destination
-    lot.current_truck_id = null
-    lot.updated_at = nowIso()
-    const op: QuarantineOperationRow = {
-      id: `qu-${this.state.nextOpId++}`,
-      organization_id: this.state.organization.id,
-      movement_id: movement.id,
-      item_lot_id: lot.id,
-      reason: input.reason,
-      status: "open",
-      opened_by: input.operatorId,
-      opened_at: nowIso(),
-      resolved_by: null,
-      resolved_at: null,
-      resolution_note: null,
-    }
-    this.state.quarantineOps.push(op)
-    appendAudit(this.state, {
-      actor_id: input.operatorId,
-      action: "quarantine.create",
-      entity_type: "item_lot",
-      entity_id: lot.id,
-      before: null,
-      after: { status: "in_quarantine" },
-      reason: input.reason,
-      metadata: null,
-    })
+    const op = this.state.quarantineOps.find((o) => o.movement_id === resultado.movimiento.id)
+    if (!op) throw demoError("la operación de rezago no se registró al ejecutar el movimiento (engine)")
     return clone(op)
   }
 
   async resolver(id: string, input: HoldResolveInput): Promise<QuarantineOperationRow> {
     const op = this.state.quarantineOps.find((o) => o.id === id)
     if (!op) throw demoError(`rezago ${id} no encontrado`)
-    if (op.status === "resolved" || op.status === "released") throw demoError(`rezago ${id} ya resuelto`)
-    resolveHold(this.state, "quarantine", op, input)
-    op.status = "released"
-    op.resolved_by = input.resolvedBy ?? null
-    op.resolved_at = nowIso()
-    op.resolution_note = input.resolutionNote
-    appendAudit(this.state, {
-      actor_id: input.resolvedBy ?? "user-demo",
-      action: "quarantine.release",
-      entity_type: "item_lot",
-      entity_id: op.item_lot_id,
-      before: null,
-      after: { status: "released" },
-      reason: input.resolutionNote,
-      metadata: null,
+    if (op.status !== "open") throw demoError(`rezago ${id} no está abierto (${op.status})`)
+    if (!input.resolutionNote.trim()) throw demoError("resolutionNote es obligatoria al resolver un rezago")
+    const lot = findLot(this.state, op.item_lot_id)
+
+    // Engine release: I1 supervisor gate (rbac.md §3) + I6 requires the
+    // resolution note; execution releases the lot and resolves the open
+    // case (status → 'resolved', special-areas.md §REZAGO lifecycle).
+    await this.movements.ejecutarMovimiento({
+      kind: "release",
+      manifestId: lot.manifest_id,
+      operatorId: input.resolvedBy ?? null,
+      operationKey: input.operationKey,
+      motivo: input.resolutionNote,
+      locationId: lot.current_location_id,
+      items: [
+        {
+          itemLotId: lot.id,
+          cantidad: lot.quantity,
+          origenLocationId: lot.current_location_id,
+          destinoLocationId: lot.current_location_id,
+        },
+      ],
     })
-    return clone(op)
+    const resuelto = this.state.quarantineOps.find((o) => o.id === id)
+    if (!resuelto) throw demoError(`rezago ${id} desapareció tras el release (engine)`)
+    return clone(resuelto)
   }
 }
 
 class DemoSeizureHoldService implements SeizureHoldService {
   private readonly state: DemoState
+  private readonly movements: DemoMovementService
 
-  constructor(state: DemoState) {
+  constructor(state: DemoState, movements: DemoMovementService) {
     this.state = state
+    this.movements = movements
   }
 
   async listar(filtros?: SeizureHoldFiltros): Promise<SeizureOperationRow[]> {
@@ -1674,128 +1671,157 @@ class DemoSeizureHoldService implements SeizureHoldService {
     requirePermission(this.state, "seizure.create", "abrir secuestro")
     if (!input.legalRef.trim()) throw demoError("la referencia legal (legal_ref) es obligatoria para abrir un secuestro")
     if (!input.operatorId) throw demoError("operatorId es obligatorio al abrir un secuestro (opened_by NOT NULL)")
-    assertLocationAccepts(this.state, input.locationId)
     const lot = findLot(this.state, input.itemLotId)
-    if (lot.status === "seized" || lot.status === "in_quarantine") {
-      throw demoError(`el lote ${lot.id} ya está retenido (${lot.status})`)
-    }
-    const destination = input.locationId ?? lot.current_location_id ?? "loc-secuestro"
-    const movement = createDemoMovement(this.state, {
+
+    // Spec §5: opening a legal hold IS the engine command (guards I1..I7 +
+    // whole-lot block + append-only op row + audit; `motivo` carries the
+    // legal_ref, the engine writes it to `legal_ref`). Never insert a
+    // second op row.
+    const resultado = await this.movements.ejecutarMovimiento({
       kind: "seizure",
       manifestId: lot.manifest_id,
       operatorId: input.operatorId,
       ocurridoEn: input.ocurridoEn,
       operationKey: input.operationKey,
-      motivo: input.notas ?? null,
-      locationId: destination,
+      motivo: input.legalRef,
+      locationId: input.locationId ?? lot.current_location_id,
       items: [
         {
           itemLotId: lot.id,
           cantidad: lot.quantity,
           origenLocationId: lot.current_location_id,
-          destinoLocationId: destination,
+          destinoLocationId: input.locationId ?? lot.current_location_id,
           notas: input.notas,
         },
       ],
     })
-    lot.status = "seized"
-    lot.current_location_id = destination
-    lot.current_truck_id = null
-    lot.updated_at = nowIso()
-    const op: SeizureOperationRow = {
-      id: `se-${this.state.nextOpId++}`,
-      organization_id: this.state.organization.id,
-      movement_id: movement.id,
-      item_lot_id: lot.id,
-      legal_ref: input.legalRef,
-      status: "open",
-      opened_by: input.operatorId,
-      opened_at: nowIso(),
-      resolved_by: null,
-      resolved_at: null,
-      resolution_note: null,
-    }
-    this.state.seizureOps.push(op)
-    appendAudit(this.state, {
-      actor_id: input.operatorId,
-      action: "seizure.create",
-      entity_type: "item_lot",
-      entity_id: lot.id,
-      before: null,
-      after: { status: "seized" },
-      reason: input.notas ?? null,
-      metadata: null,
-    })
+    const op = this.state.seizureOps.find((o) => o.movement_id === resultado.movimiento.id)
+    if (!op) throw demoError("la operación de secuestro no se registró al ejecutar el movimiento (engine)")
     return clone(op)
   }
 
   async resolver(id: string, input: HoldResolveInput): Promise<SeizureOperationRow> {
     const op = this.state.seizureOps.find((o) => o.id === id)
     if (!op) throw demoError(`secuestro ${id} no encontrado`)
-    if (op.status === "resolved") throw demoError(`secuestro ${id} ya resuelto`)
-    resolveHold(this.state, "seizure", op, input)
-    op.status = "resolved"
-    op.resolved_by = input.resolvedBy ?? null
-    op.resolved_at = nowIso()
-    op.resolution_note = input.resolutionNote
-    appendAudit(this.state, {
-      actor_id: input.resolvedBy ?? "user-demo",
-      action: "seizure.release",
-      entity_type: "item_lot",
-      entity_id: op.item_lot_id,
-      before: null,
-      after: { status: "released" },
-      reason: input.resolutionNote,
-      metadata: null,
-    })
-    return clone(op)
-  }
-}
+    if (op.status !== "open") throw demoError(`secuestro ${id} no está abierto (${op.status})`)
+    if (!input.resolutionNote.trim()) throw demoError("resolutionNote es obligatoria al resolver un secuestro")
+    const lot = findLot(this.state, op.item_lot_id)
 
-/** Shared release: movement kind 'release' + lot unfreeze (supervisor gate). */
-function resolveHold(
-  state: DemoState,
-  kind: "quarantine" | "seizure",
-  op: { item_lot_id: string; movement_id: number },
-  input: HoldResolveInput,
-): void {
-  // Supervisor gate: the RLS has no UPDATE policy on ops; the engine path
-  // re-validates. The demo enforces the same two-role window.
-  if (state.role !== "admin" && state.role !== "supervisor") {
-    throw demoError(`resolver ${kind} requiere rol admin o supervisor (actual: ${state.role})`)
+    // Engine release: I1 supervisor gate (rbac.md §3) + I6 requires the
+    // resolution note; execution releases the lot and resolves the open
+    // case (status → 'resolved').
+    await this.movements.ejecutarMovimiento({
+      kind: "release",
+      manifestId: lot.manifest_id,
+      operatorId: input.resolvedBy ?? null,
+      operationKey: input.operationKey,
+      motivo: input.resolutionNote,
+      locationId: lot.current_location_id,
+      items: [
+        {
+          itemLotId: lot.id,
+          cantidad: lot.quantity,
+          origenLocationId: lot.current_location_id,
+          destinoLocationId: lot.current_location_id,
+        },
+      ],
+    })
+    const resuelto = this.state.seizureOps.find((o) => o.id === id)
+    if (!resuelto) throw demoError(`secuestro ${id} desapareció tras el release (engine)`)
+    return clone(resuelto)
   }
-  if (!input.resolutionNote.trim()) {
-    throw demoError(`resolutionNote es obligatoria al resolver un ${kind}`)
-  }
-  const lot = findLot(state, op.item_lot_id)
-  requireMovementKind(state, "release")
-  createDemoMovement(state, {
-    kind: "release",
-    manifestId: lot.manifest_id,
-    operatorId: input.resolvedBy ?? null,
-    motivo: input.resolutionNote,
-    locationId: lot.current_location_id,
-    items: [
-      {
-        itemLotId: lot.id,
-        cantidad: lot.quantity,
-        origenLocationId: lot.current_location_id,
-        destinoLocationId: lot.current_location_id,
-        notas: input.resolutionNote,
-      },
-    ],
-  })
-  lot.status = "released"
-  lot.updated_at = nowIso()
 }
 
 class DemoHoldService implements HoldService {
   readonly quarantine: QuarantineHoldService
   readonly seizure: SeizureHoldService
+  private readonly state: DemoState
 
-  constructor(state: DemoState) {
-    this.quarantine = new DemoQuarantineHoldService(state)
-    this.seizure = new DemoSeizureHoldService(state)
+  constructor(state: DemoState, movements: DemoMovementService) {
+    this.state = state
+    this.quarantine = new DemoQuarantineHoldService(state, movements)
+    this.seizure = new DemoSeizureHoldService(state, movements)
+  }
+
+  /**
+   * hold_open view semantics (0005_views.sql v6): OPEN cases only, enriched
+   * with lot/item/manifest context. Per-kind visibility follows the reader's
+   * permissions; when no kind is requested, each kind is included only if
+   * its read permission is granted.
+   */
+  async obtenerAbiertos(kind?: "quarantine" | "seizure"): Promise<HoldOpenRow[]> {
+    const puedeVerQ = hasPermission(this.state.role, "quarantine.read")
+    const puedeVerS = hasPermission(this.state.role, "seizure.read")
+    if (kind === "quarantine") requirePermission(this.state, "quarantine.read", "casos abiertos de rezago")
+    if (kind === "seizure") requirePermission(this.state, "seizure.read", "casos abiertos de secuestro")
+
+    const rows: HoldOpenRow[] = []
+    const contexto = (lotId: string) => {
+      const lot = this.state.lots.find((l) => l.id === lotId)
+      const item = lot ? this.state.items.find((i) => i.id === lot.cargo_item_id) : undefined
+      const manifest = lot ? findManifest(this.state, lot.manifest_id) : undefined
+      return { lot, item, manifest }
+    }
+
+    if ((kind === undefined || kind === "quarantine") && puedeVerQ) {
+      for (const q of this.state.quarantineOps) {
+        if (q.status !== "open") continue
+        const { lot, item, manifest } = contexto(q.item_lot_id)
+        if (!lot || !manifest) continue
+        rows.push({
+          hold_type: "quarantine",
+          operation_id: q.id,
+          organization_id: q.organization_id,
+          item_lot_id: q.item_lot_id,
+          status: q.status,
+          reason: q.reason,
+          legal_ref: null,
+          opened_by: q.opened_by,
+          opened_at: q.opened_at,
+          resolution_note: q.resolution_note,
+          manifest_id: lot.manifest_id,
+          cargo_item_id: lot.cargo_item_id,
+          current_location_id: lot.current_location_id,
+          current_truck_id: lot.current_truck_id,
+          lot_status: lot.status,
+          quantity: lot.quantity,
+          uom: lot.uom,
+          sku: item?.sku ?? null,
+          item_description: item?.description ?? "",
+          manifest_code: manifest.code,
+        })
+      }
+    }
+    if ((kind === undefined || kind === "seizure") && puedeVerS) {
+      for (const s of this.state.seizureOps) {
+        if (s.status !== "open") continue
+        const { lot, item, manifest } = contexto(s.item_lot_id)
+        if (!lot || !manifest) continue
+        rows.push({
+          hold_type: "seizure",
+          operation_id: s.id,
+          organization_id: s.organization_id,
+          item_lot_id: s.item_lot_id,
+          status: s.status,
+          reason: null,
+          legal_ref: s.legal_ref,
+          opened_by: s.opened_by,
+          opened_at: s.opened_at,
+          resolution_note: s.resolution_note,
+          manifest_id: lot.manifest_id,
+          cargo_item_id: lot.cargo_item_id,
+          current_location_id: lot.current_location_id,
+          current_truck_id: lot.current_truck_id,
+          lot_status: lot.status,
+          quantity: lot.quantity,
+          uom: lot.uom,
+          sku: item?.sku ?? null,
+          item_description: item?.description ?? "",
+          manifest_code: manifest.code,
+        })
+      }
+    }
+    return clone(rows.sort((a, b) => b.opened_at.localeCompare(a.opened_at)))
   }
 }
 
@@ -2284,7 +2310,7 @@ export function createDemoServices(options: DemoServiceOptions = {}): DemoServic
     movements,
     locations: new DemoLocationService(state),
     stations: new DemoStationService(state),
-    holds: new DemoHoldService(state),
+    holds: new DemoHoldService(state, movements),
     audit: new DemoAuditService(state),
     dashboard: new DemoDashboardService(state),
     layouts: new DemoLayoutService(state),

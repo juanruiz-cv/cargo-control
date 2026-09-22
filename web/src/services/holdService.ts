@@ -1,24 +1,32 @@
 /**
  * Hold service — rezago (quarantine) & secuestro (seizure), Fase 10 (ADR 0011).
  *
+ * Opening a case IS the engine command (spec §5): `ejecutarMovimiento` runs
+ * guards I1..I7 (permission, frozen-lot gate, active destination with
+ * allows_hold, required motivo/reason) and applies movement + lot freeze +
+ * the append-only operation row + audit in ONE surface (special-areas.md
+ * §REZAGO/§SECUESTRO). The client never inserts a second op row — it fetches
+ * the engine-created row back by movement_id.
+ *
  * Resolution is a SERVER-SIDE supervisor flow by design (rbac.md §3,
- * states.md): opening = movement kind quarantine/seizure + operation row +
- * lot freeze; resolving = movement kind 'release' + a status update that RLS
+ * states.md): resolving = movement kind 'release' + a status update that RLS
  * DOES NOT grant the client (quarantine_operations/seizure_operations have
  * no UPDATE/DELETE policies, 0004_rls.sql). The Supabase `resolver`
- * therefore reports the engine dependency explicitly; the DEMO adapter
- * implements the full flow in memory (dev only).
+ * therefore reports the engine dependency explicitly (ENGINE_DEPENDENCIA);
+ * the DEMO adapter implements the full flow in memory (dev only).
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
+  HOLD_OPEN_COLUMNS,
   QUARANTINE_OP_COLUMNS,
   SEIZURE_OP_COLUMNS,
 } from "@/services/columns"
-import { SupabaseMovementService } from "@/services/movementService"
+import { MovementEngineError, SupabaseMovementService } from "@/services/movementService"
 import type { MovementExecutionInput, QuarantineHoldFiltros, SeizureHoldFiltros } from "@/services/shared"
 import type {
+  HoldOpenRow,
   ItemLotRow,
   QuarantineOperationRow,
   SeizureOperationRow,
@@ -77,6 +85,12 @@ export interface SeizureHoldService {
 export interface HoldService {
   quarantine: QuarantineHoldService
   seizure: SeizureHoldService
+  /**
+   * hold_open view (0005_views.sql v6): OPEN rezago/secuestro cases with
+   * lot/item/manifest context (frozen/blocked visibility, special-areas.md
+   * §Derived views). Rows are open-only by view definition.
+   */
+  obtenerAbiertos(kind?: "quarantine" | "seizure"): Promise<HoldOpenRow[]>
 }
 
 async function fetchLot(client: SupabaseClient, itemLotId: string): Promise<ItemLotRow> {
@@ -92,29 +106,46 @@ async function fetchLot(client: SupabaseClient, itemLotId: string): Promise<Item
   return data as ItemLotRow
 }
 
-/** Destination must exist, be active and allow holds (rezago/secuestro staging). */
-async function assertHoldLocation(client: SupabaseClient, locationId?: string): Promise<void> {
-  if (!locationId) return
+/**
+ * Fetch the operation row the engine created for `movementId`. The client
+ * never inserts op rows itself (ADR 0011 append-only; the engine wrote them).
+ */
+async function fetchHoldRow<T>(
+  client: SupabaseClient,
+  table: "quarantine_operations" | "seizure_operations",
+  columns: string,
+  movementId: number,
+): Promise<T> {
   const { data, error } = await client
-    .from("locations")
-    .select("id, active, allows_hold")
-    .eq("id", locationId)
+    .from(table)
+    .select(columns)
+    .eq("movement_id", movementId)
     .maybeSingle()
-  if (error) throw new Error(`location ${locationId}: ${error.message}`)
-  if (!data) throw new Error(`La location ${locationId} no existe`)
-  if (!data.active) throw new Error(`La location ${locationId} está inactiva`)
-  if (!data.allows_hold) throw new Error(`La location ${locationId} no permite holds (allows_hold=false)`)
+  if (error) throw new Error(`${table} (movement ${movementId}): ${error.message}`)
+  if (!data) throw new Error(`La operación de ${table} no se registró al ejecutar el movimiento (engine)`)
+  return data as T
 }
 
 export class SupabaseHoldService implements HoldService {
   readonly quarantine: QuarantineHoldService
   readonly seizure: SeizureHoldService
-  private readonly movements: SupabaseMovementService
+  private readonly client: SupabaseClient | null
 
   constructor(client: SupabaseClient | null) {
-    this.movements = new SupabaseMovementService(client)
-    this.quarantine = new SupabaseQuarantineHoldService(client, this.movements)
-    this.seizure = new SupabaseSeizureHoldService(client, this.movements)
+    this.client = client
+    this.quarantine = new SupabaseQuarantineHoldService(client)
+    this.seizure = new SupabaseSeizureHoldService(client)
+  }
+
+  async obtenerAbiertos(kind?: "quarantine" | "seizure"): Promise<HoldOpenRow[]> {
+    const client = requireClient(this.client)
+    let query = client.from("hold_open").select(HOLD_OPEN_COLUMNS)
+    if (kind) query = query.eq("hold_type", kind)
+    query = query.order("opened_at", { ascending: false })
+
+    const { data, error } = await query
+    if (error) throw new Error(`hold_open: ${error.message}`)
+    return (data ?? []) as HoldOpenRow[]
   }
 }
 
@@ -122,9 +153,9 @@ class SupabaseQuarantineHoldService implements QuarantineHoldService {
   private readonly client: SupabaseClient | null
   private readonly movements: SupabaseMovementService
 
-  constructor(client: SupabaseClient | null, movements: SupabaseMovementService) {
+  constructor(client: SupabaseClient | null) {
     this.client = client
-    this.movements = movements
+    this.movements = new SupabaseMovementService(client)
   }
 
   async listar(filtros?: QuarantineHoldFiltros): Promise<QuarantineOperationRow[]> {
@@ -152,9 +183,12 @@ class SupabaseQuarantineHoldService implements QuarantineHoldService {
     if (!input.operatorId) throw new Error("operatorId es obligatorio al abrir un rezago (opened_by es NOT NULL)")
 
     const lot = await fetchLot(client, input.itemLotId)
-    await assertHoldLocation(client, input.locationId)
 
-    const movement = await this.movements.crearMovimiento({
+    // Spec §5: opening a hold IS the engine command — guards I1..I7
+    // (quarantine.create permission, frozen-lot gate, active destination
+    // with allows_hold, required motivo) + whole-lot transition + the
+    // append-only quarantine_operations row + audit, all in ONE surface.
+    const resultado = await this.movements.ejecutarMovimiento({
       kind: "quarantine",
       manifestId: lot.manifest_id,
       operatorId: input.operatorId ?? null,
@@ -173,34 +207,20 @@ class SupabaseQuarantineHoldService implements QuarantineHoldService {
       ],
     })
 
-    const { data: operation, error: opError } = await client
-      .from("quarantine_operations")
-      .insert({
-        movement_id: movement.id,
-        item_lot_id: input.itemLotId,
-        reason: input.reason,
-        opened_by: input.operatorId,
-      })
-      .select(QUARANTINE_OP_COLUMNS)
-      .single()
-    if (opError) throw new Error(`quarantine_operations insert: ${opError.message}`)
-
-    // Freeze the lot (states.md): status in_quarantine + placement at the hold area.
-    const { error: lotError } = await client
-      .from("item_lots")
-      .update({
-        status: "in_quarantine",
-        current_location_id: input.locationId ?? lot.current_location_id,
-        current_truck_id: null,
-      })
-      .eq("id", lot.id)
-    if (lotError) throw new Error(`item_lots update ${lot.id}: ${lotError.message}`)
-
-    return operation as QuarantineOperationRow
+    // The engine inserted the op row with the movement; fetch it back by
+    // movement_id instead of inserting a second row (ADR 0011 append-only).
+    return fetchHoldRow<QuarantineOperationRow>(
+      client,
+      "quarantine_operations",
+      QUARANTINE_OP_COLUMNS,
+      resultado.movimiento.id,
+    )
   }
 
   async resolver(id: string, _input: HoldResolveInput): Promise<QuarantineOperationRow> {
-    throw new Error(
+    throw new MovementEngineError(
+      [],
+      "ENGINE_DEPENDENCIA",
       `Resolver rezago ${id} requiere el flujo server-side de supervisor (movimiento 'release' + update de estado): ` +
         "RLS no concede UPDATE sobre quarantine_operations (ADR 0011). " +
         "El adaptador DEMO implementa la resolución completa para desarrollo.",
@@ -212,9 +232,9 @@ class SupabaseSeizureHoldService implements SeizureHoldService {
   private readonly client: SupabaseClient | null
   private readonly movements: SupabaseMovementService
 
-  constructor(client: SupabaseClient | null, movements: SupabaseMovementService) {
+  constructor(client: SupabaseClient | null) {
     this.client = client
-    this.movements = movements
+    this.movements = new SupabaseMovementService(client)
   }
 
   async listar(filtros?: SeizureHoldFiltros): Promise<SeizureOperationRow[]> {
@@ -242,15 +262,19 @@ class SupabaseSeizureHoldService implements SeizureHoldService {
     if (!input.operatorId) throw new Error("operatorId es obligatorio al abrir un secuestro (opened_by es NOT NULL)")
 
     const lot = await fetchLot(client, input.itemLotId)
-    await assertHoldLocation(client, input.locationId)
 
-    const movement = await this.movements.crearMovimiento({
+    // Spec §5: opening a legal hold IS the engine command — guards I1..I7
+    // (seizure.create permission, frozen-lot gate, active destination with
+    // allows_hold, required motivo) + whole-lot transition + the append-only
+    // seizure_operations row (`motivo` carries the legal_ref; the engine
+    // writes it to `legal_ref`) + audit, all in ONE surface.
+    const resultado = await this.movements.ejecutarMovimiento({
       kind: "seizure",
       manifestId: lot.manifest_id,
       operatorId: input.operatorId ?? null,
       ocurridoEn: input.ocurridoEn,
       operationKey: input.operationKey,
-      motivo: input.notas ?? null,
+      motivo: input.legalRef,
       locationId: input.locationId ?? lot.current_location_id,
       items: [
         {
@@ -263,34 +287,20 @@ class SupabaseSeizureHoldService implements SeizureHoldService {
       ],
     })
 
-    const { data: operation, error: opError } = await client
-      .from("seizure_operations")
-      .insert({
-        movement_id: movement.id,
-        item_lot_id: input.itemLotId,
-        legal_ref: input.legalRef,
-        opened_by: input.operatorId,
-      })
-      .select(SEIZURE_OP_COLUMNS)
-      .single()
-    if (opError) throw new Error(`seizure_operations insert: ${opError.message}`)
-
-    // Block the lot (states.md): status seized + placement at the hold area.
-    const { error: lotError } = await client
-      .from("item_lots")
-      .update({
-        status: "seized",
-        current_location_id: input.locationId ?? lot.current_location_id,
-        current_truck_id: null,
-      })
-      .eq("id", lot.id)
-    if (lotError) throw new Error(`item_lots update ${lot.id}: ${lotError.message}`)
-
-    return operation as SeizureOperationRow
+    // The engine inserted the op row with the movement; fetch it back by
+    // movement_id instead of inserting a second row (ADR 0011 append-only).
+    return fetchHoldRow<SeizureOperationRow>(
+      client,
+      "seizure_operations",
+      SEIZURE_OP_COLUMNS,
+      resultado.movimiento.id,
+    )
   }
 
   async resolver(id: string, _input: HoldResolveInput): Promise<SeizureOperationRow> {
-    throw new Error(
+    throw new MovementEngineError(
+      [],
+      "ENGINE_DEPENDENCIA",
       `Resolver secuestro ${id} requiere el flujo server-side de supervisor (movimiento 'release' + update de estado): ` +
         "RLS no concede UPDATE sobre seizure_operations (ADR 0011). " +
         "El adaptador DEMO implementa la resolución completa para desarrollo.",

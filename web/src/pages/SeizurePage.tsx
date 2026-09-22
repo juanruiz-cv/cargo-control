@@ -1,13 +1,10 @@
-import { ShieldCheckIcon } from "lucide-react"
+import { HoldModulePage } from "@/components/special-areas/HoldModulePage"
 
-import { ModuleStubPage } from "@/components/shared/ModuleStubPage"
-
+/**
+ * Secuestro (seizure holds) module shell — special-areas.md §SECUESTRO.
+ * /seizure and /seizure/:id land here; the param is not used yet
+ * (routes registry → SeizurePage).
+ */
 export function SeizurePage() {
-  return (
-    <ModuleStubPage
-      module="Secuestro"
-      description="Casos de secuestro de mercadería y evidencias (Fase 10)."
-      icon={ShieldCheckIcon}
-    />
-  )
+  return <HoldModulePage kind="seizure" />
 }

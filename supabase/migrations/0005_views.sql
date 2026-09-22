@@ -98,9 +98,12 @@ with (security_invoker = true) as
 -- operation land in the same engine transaction (movement-engine.md
 -- §Transactional), so the operation's movement_id matches the placement
 -- movement_item's movement_id.
--- TODO DECISION: if a non-success result (error/ambiguous) must keep the lot
--- pending, add `and so.result = 'success'` (and the scale analogue `... and
--- so.within_tolerance` for tolerance failures) to the NOT EXISTS below.
+-- TODO DECISION (resolved for Fase 10): non-success results (error /
+-- ambiguous) keep the lot pending — `so.result = 'success'` on the scan
+-- branch and `so.within_tolerance = true` (tolerance failures) on the scale
+-- branch (special-areas.md §History; SBF-05 / SBF-08 in
+-- docs/qa/scanner-balanza-rezago-flow-tests.md). Every capture still writes
+-- its operation row; only the pending-queue projection filters it out.
 -- ---------------------------------------------------------------------
 create or replace view public.station_queue
 with (security_invoker = true) as
@@ -121,6 +124,7 @@ with (security_invoker = true) as
       select 1
       from public.scanner_operations so
       where so.item_lot_id = l.id
+        and so.result = 'success'
         and so.movement_id = (
           select mi.movement_id
           from public.movement_items mi
@@ -146,6 +150,7 @@ with (security_invoker = true) as
       select 1
       from public.scale_operations so
       where so.item_lot_id = l.id
+        and so.within_tolerance = true
         and so.movement_id = (
           select mi.movement_id
           from public.movement_items mi
