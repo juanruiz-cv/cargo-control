@@ -186,6 +186,11 @@ export function MovementsTimeline({
                           <span className="font-medium text-foreground group-hover:underline">
                             {MOVEMENT_KIND_LABELS[mov.kind]}
                           </span>
+                          {mov.kind === "correction" && mov.previous_movement_id ? (
+                            <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-xs font-medium text-slate-600">
+                              Corrección de #{mov.previous_movement_id}
+                            </span>
+                          ) : null}
                           {codigos.get(mov.manifest_id ?? "") ?? mov.manifest_id ? (
                             <span className="truncate text-sm text-muted-foreground">
                               {codigos.get(mov.manifest_id ?? "") ?? mov.manifest_id}

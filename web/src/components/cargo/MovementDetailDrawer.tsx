@@ -155,6 +155,14 @@ export function MovementDetailDrawer({
                     {nombreUbicacion(detalle.movement.location_id) ?? "—"}
                   </dd>
                 </div>
+                {detalle.movement.previous_movement_id ? (
+                  <div>
+                    <dt className="text-muted-foreground">Corrige</dt>
+                    <dd className="font-medium text-foreground">
+                      #{detalle.movement.previous_movement_id}
+                    </dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt className="text-muted-foreground">ID</dt>
                   <dd className="font-medium text-foreground">#{detalle.movement.id}</dd>

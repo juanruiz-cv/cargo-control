@@ -51,8 +51,24 @@ import {
   type LayoutVersionRow,
   type MapaOperativoResultado,
 } from "@/services/layoutService"
-import { MOVEMENT_KIND_PERMISSION, type MovementService } from "@/services/movementService"
+import {
+  MOVEMENT_KIND_PERMISSION,
+  MovementEngineError,
+  type EngineResultado,
+  type MovementService,
+} from "@/services/movementService"
 import type { MovementDetail } from "@/services/movementService"
+import {
+  computarOcupaciones,
+  esReplayDuplicado,
+  hayFallos,
+  validarMovimiento,
+} from "@/lib/movement-guards"
+import type {
+  EngineCandidate,
+  EngineCandidateItem,
+  ValidationContext,
+} from "@/lib/movement-guards"
 import type {
   AuthService,
   LoginResult,
@@ -365,6 +381,503 @@ class DemoMovementService implements MovementService {
 
   async listarPorItemLot(itemLotId: string, filtros?: PaginationFiltros): Promise<MovementRow[]> {
     return this.listarMovimientos({ itemLotId, ...filtros })
+  }
+
+  // -------------------------------------------------------------------
+  // Engine surface (I1..I7 + in-memory execution, mirror of the Supabase
+  // implementation — but the demo CAN execute every kind, including split).
+  // -------------------------------------------------------------------
+
+  async ejecutarMovimiento(input: CreateMovementInput): Promise<EngineResultado> {
+    const opKey = input.operationKey ?? null
+
+    // ME-07 fast path: the SAME operation_key already produced a movement.
+    if (opKey) {
+      const existente = this.state.movements.find((m) => m.operation_key === opKey)
+      if (existente) return { movimiento: clone(existente), duplicado: true, validaciones: [] }
+    }
+
+    const ctx = this.armarContextoDemo(input, opKey)
+    const candidato: EngineCandidate = {
+      kind: input.kind,
+      manifestId: input.manifestId ?? null,
+      facilityId: input.facilityId ?? null,
+      locationId: input.locationId ?? null,
+      motivo: input.motivo ?? null,
+      operationKey: opKey,
+      previousMovementId: input.previousMovementId ?? null,
+      items: input.items as EngineCandidateItem[] | undefined,
+    }
+
+    const validaciones = validarMovimiento(candidato, ctx)
+
+    // Race-safe replay: I7 may detect the duplicate inside the pipeline.
+    if (esReplayDuplicado(validaciones) && ctx.existentePorOperationKey) {
+      return { movimiento: clone(ctx.existentePorOperationKey), duplicado: true, validaciones: [] }
+    }
+    if (hayFallos(validaciones)) {
+      throw new MovementEngineError(validaciones)
+    }
+
+    const movimiento = this.ejecutarDemo(input)
+    return { movimiento, duplicado: false, validaciones }
+  }
+
+  async buscarPorOperationKey(operationKey: string): Promise<MovementRow | null> {
+    const existente = this.state.movements.find((m) => m.operation_key === operationKey)
+    return existente ? clone(existente) : null
+  }
+
+  generarOperationKey(kind: MovementKind): string {
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    return `${kind}:${id}`
+  }
+
+  async registrarCorreccion(
+    movementId: number,
+    motivo: string,
+    operationKey?: string | null,
+  ): Promise<MovementRow> {
+    const original = this.state.movements.find((m) => m.id === movementId)
+    if (!original) {
+      throw new MovementEngineError([], "VALIDACION", `El movimiento #${movementId} no existe`)
+    }
+    // AC-E8-3: la corrección hereda el contexto del movimiento original.
+    const resultado = await this.ejecutarMovimiento({
+      kind: "correction",
+      manifestId: original.manifest_id ?? null,
+      facilityId: original.facility_id ?? null,
+      locationId: original.location_id ?? null,
+      previousMovementId: movementId,
+      motivo,
+      operationKey,
+    })
+    return resultado.movimiento
+  }
+
+  /**
+   * Bounded read model mirroring the Supabase `armarContexto`. Occupancy is
+   * computed with the EXACT `location_occupancy` view semantics
+   * (0005_views.sql) over the FULL store — a candidate must see competing
+   * lots (e.g. SECTOR-01 already full with lot-1-4), not just its own.
+   */
+  private armarContextoDemo(
+    input: CreateMovementInput,
+    opKey: string | null,
+  ): ValidationContext {
+    const state = this.state
+    const items = input.items ?? []
+    const lotIds = new Set(items.map((i) => i.itemLotId))
+
+    const lotes = new Map(
+      state.lots.filter((l) => lotIds.has(l.id)).map((l) => [l.id, clone(l)] as const),
+    )
+    // egress no lleva items, pero I6 necesita TODOS los lotes del manifiesto
+    // para el chequeo de retenidos (AC-E2-2).
+    if (input.kind === "egress" && input.manifestId) {
+      for (const l of state.lots.filter((lot) => lot.manifest_id === input.manifestId)) {
+        if (!lotes.has(l.id)) lotes.set(l.id, clone(l))
+      }
+    }
+    const cargoItemIds = new Set([...lotes.values()].map((l) => l.cargo_item_id))
+    const itemsMap = new Map(
+      state.items.filter((i) => cargoItemIds.has(i.id)).map((i) => [i.id, clone(i)] as const),
+    )
+    const lotesDelItem = new Map<string, readonly ItemLotRow[]>()
+    if (input.kind === "split") {
+      for (const id of cargoItemIds) {
+        lotesDelItem.set(
+          id,
+          state.lots.filter((l) => l.cargo_item_id === id).map((l) => clone(l)),
+        )
+      }
+    }
+
+    const manifestIds = new Set(
+      [input.manifestId, ...[...lotes.values()].map((l) => l.manifest_id)].filter(
+        (x): x is string => !!x,
+      ),
+    )
+    const manifests = new Map(
+      state.manifests.filter((m) => manifestIds.has(m.id)).map((m) => [m.id, clone(m)] as const),
+    )
+
+    const locIds = new Set(
+      [
+        input.locationId,
+        ...[...lotes.values()].map((l) => l.current_location_id),
+        ...items.flatMap((i) => [i.origenLocationId, i.destinoLocationId]),
+      ].filter((x): x is string => !!x),
+    )
+    const ubicaciones = state.locations.filter((l) => locIds.has(l.id))
+    const locations = new Map(ubicaciones.map((l) => [l.id, clone(l)] as const))
+    const ocupacion = computarOcupaciones(ubicaciones, state.lots, state.items)
+
+    const movimientos = state.movements.filter(
+      (m) =>
+        (input.previousMovementId != null && m.id === input.previousMovementId) ||
+        ((input.kind === "arrival" || input.kind === "egress") &&
+          m.manifest_id === input.manifestId &&
+          (m.kind === "arrival" || m.kind === "egress")),
+    )
+    const existentePorOperationKey = opKey
+      ? (state.movements.find((m) => m.operation_key === opKey) ?? null)
+      : null
+
+    let quarantine = new Map<string, QuarantineOperationRow>()
+    let seizure = new Map<string, SeizureOperationRow>()
+    if (input.kind === "release") {
+      quarantine = new Map(
+        state.quarantineOps
+          .filter((q) => lotIds.has(q.item_lot_id) && q.status === "open")
+          .map((q) => [q.item_lot_id, clone(q)] as const),
+      )
+      seizure = new Map(
+        state.seizureOps
+          .filter((s) => lotIds.has(s.item_lot_id) && s.status === "open")
+          .map((s) => [s.item_lot_id, clone(s)] as const),
+      )
+    }
+
+    const requerido = MOVEMENT_KIND_PERMISSION[input.kind]
+    const requeridos = (Array.isArray(requerido) ? requerido : [requerido]) as PermissionCode[]
+    const permisos = requeridos.filter((p) => hasPermission(state.role, p))
+    const roles: RoleCode[] =
+      input.kind === "release" && (state.role === "admin" || state.role === "supervisor")
+        ? [state.role]
+        : []
+
+    return {
+      permisos,
+      roles,
+      lotes,
+      lotesDelItem,
+      items: itemsMap,
+      manifests,
+      locations,
+      ocupacion,
+      movimientos,
+      existentePorOperationKey,
+      holdsAbiertos: { quarantine, seizure },
+    }
+  }
+
+  /**
+   * In-memory mutation per kind (flows.md transitions + legacy rollups).
+   * Audit rows use the audit.md CATALOG actions (movement.* / operation.* /
+   * truck.*); the seed and the legacy cargo/hold flows still emit
+   * `cargo.discharge` / `quarantine.create` / `seizure.create` — a known
+   * deviation that this work does not touch.
+   */
+  private ejecutarDemo(input: CreateMovementInput): MovementRow {
+    const state = this.state
+    const operatorId = input.operatorId ?? "user-demo"
+    const items = input.items ?? []
+    const movement = createDemoMovement(state, input)
+    const manifiesto = input.manifestId
+      ? (state.manifests.find((m) => m.id === input.manifestId) ?? null)
+      : null
+
+    switch (input.kind) {
+      case "arrival": {
+        if (manifiesto) {
+          manifiesto.status = "in_playon"
+          if (manifiesto.truck_id) {
+            const truck = state.trucks.find((t) => t.id === manifiesto!.truck_id)
+            if (truck) truck.status = "in_playon"
+          }
+          for (const item of state.items.filter((i) => i.manifest_id === input.manifestId)) {
+            item.status = "on_truck"
+          }
+          appendAudit(state, {
+            actor_id: operatorId,
+            action: "truck.arrival",
+            entity_type: "cargo_manifest",
+            entity_id: input.manifestId ?? "",
+            before: null,
+            after: { status: "in_playon" },
+            reason: input.motivo ?? null,
+            metadata: { movement_id: movement.id },
+          })
+        }
+        break
+      }
+      case "discharge": {
+        for (const it of items) {
+          const lot = findLot(state, it.itemLotId)
+          const before = {
+            status: lot.status,
+            current_location_id: lot.current_location_id,
+            current_truck_id: lot.current_truck_id,
+          }
+          lot.status = "discharged"
+          lot.current_location_id = it.destinoLocationId ?? input.locationId ?? lot.current_location_id
+          lot.current_truck_id = null
+          lot.updated_at = nowIso()
+          appendAudit(state, {
+            actor_id: operatorId,
+            action: "movement.discharge",
+            entity_type: "item_lot",
+            entity_id: lot.id,
+            before,
+            after: {
+              status: lot.status,
+              current_location_id: lot.current_location_id,
+              current_truck_id: null,
+            },
+            reason: input.motivo ?? null,
+            metadata: { movement_id: movement.id },
+          })
+        }
+        if (manifiesto) manifiesto.status = "discharged"
+        break
+      }
+      case "split": {
+        for (const it of items) {
+          const parent = findLot(state, it.itemLotId)
+          const before = parent.quantity
+          parent.quantity = before - it.cantidad
+          parent.updated_at = nowIso()
+          const child: ItemLotRow = {
+            id: demoId("lot"),
+            organization_id: parent.organization_id,
+            manifest_id: parent.manifest_id,
+            cargo_item_id: parent.cargo_item_id,
+            parent_lot_id: parent.id,
+            quantity: it.cantidad,
+            uom: parent.uom,
+            status: parent.status,
+            current_location_id: it.destinoLocationId ?? parent.current_location_id,
+            current_truck_id: null,
+            unit_weight_kg: parent.unit_weight_kg,
+            unit_volume_m3: parent.unit_volume_m3,
+            created_via_movement_id: movement.id,
+            created_at: nowIso(),
+            updated_at: nowIso(),
+          }
+          state.lots.push(child)
+          appendAudit(state, {
+            actor_id: operatorId,
+            action: "movement.split",
+            entity_type: "item_lot",
+            entity_id: parent.id,
+            before: { quantity: before },
+            after: { quantity: parent.quantity, child_lot_id: child.id },
+            reason: input.motivo ?? null,
+            metadata: { movement_id: movement.id },
+          })
+        }
+        break
+      }
+      case "store":
+      case "transfer": {
+        for (const it of items) {
+          const lot = findLot(state, it.itemLotId)
+          const destino = it.destinoLocationId ?? input.locationId ?? null
+          const before = { status: lot.status, current_location_id: lot.current_location_id }
+          lot.current_location_id = destino
+          if (input.kind === "store") lot.status = "in_warehouse"
+          lot.updated_at = nowIso()
+          appendAudit(state, {
+            actor_id: operatorId,
+            action: "operation.load",
+            entity_type: "item_lot",
+            entity_id: lot.id,
+            before,
+            after: { status: lot.status, current_location_id: destino },
+            reason: input.motivo ?? null,
+            metadata: { movement_id: movement.id, movement_kind: input.kind },
+          })
+        }
+        break
+      }
+      case "load_out":
+      case "return_to_truck": {
+        const truckId = items[0]?.destinoTruckId ?? manifiesto?.truck_id ?? null
+        for (const it of items) {
+          const lot = findLot(state, it.itemLotId)
+          const before = {
+            status: lot.status,
+            current_location_id: lot.current_location_id,
+            current_truck_id: lot.current_truck_id,
+          }
+          lot.status = input.kind === "load_out" ? "loaded_out" : "on_truck"
+          lot.current_location_id = null
+          lot.current_truck_id = it.destinoTruckId ?? truckId
+          lot.updated_at = nowIso()
+          appendAudit(state, {
+            actor_id: operatorId,
+            action: input.kind === "load_out" ? "operation.load" : "movement.return_to_truck",
+            entity_type: "item_lot",
+            entity_id: lot.id,
+            before,
+            after: {
+              status: lot.status,
+              current_location_id: null,
+              current_truck_id: lot.current_truck_id,
+            },
+            reason: input.motivo ?? null,
+            metadata: { movement_id: movement.id },
+          })
+        }
+        break
+      }
+      case "scan_in":
+      case "scan_out":
+      case "scale": {
+        for (const it of items) {
+          const lot = findLot(state, it.itemLotId)
+          const before = { status: lot.status }
+          if (input.kind === "scan_in") lot.status = "checked"
+          // scan_out / scale: la transición la posee la estación (ops rows).
+          lot.updated_at = nowIso()
+          appendAudit(state, {
+            actor_id: operatorId,
+            action: input.kind === "scale" ? "operation.scale" : "operation.scan",
+            entity_type: "item_lot",
+            entity_id: lot.id,
+            before,
+            after: { status: lot.status },
+            reason: input.motivo ?? null,
+            metadata: { movement_id: movement.id, movement_kind: input.kind },
+          })
+        }
+        break
+      }
+      case "quarantine":
+      case "seizure": {
+        for (const it of items) {
+          const lot = findLot(state, it.itemLotId)
+          const before = { status: lot.status }
+          lot.status = input.kind === "quarantine" ? "in_quarantine" : "seized"
+          lot.current_location_id = it.destinoLocationId ?? input.locationId ?? lot.current_location_id
+          lot.updated_at = nowIso()
+          if (input.kind === "quarantine") {
+            state.quarantineOps.push({
+              id: `quar-${state.nextOpId++}`,
+              organization_id: state.organization.id,
+              movement_id: movement.id,
+              item_lot_id: lot.id,
+              reason: input.motivo ?? "",
+              status: "open",
+              opened_by: operatorId,
+              opened_at: movement.occurred_at,
+              resolved_by: null,
+              resolved_at: null,
+              resolution_note: null,
+            })
+          } else {
+            state.seizureOps.push({
+              id: `seiz-${state.nextOpId++}`,
+              organization_id: state.organization.id,
+              movement_id: movement.id,
+              item_lot_id: lot.id,
+              legal_ref: input.motivo ?? null,
+              status: "open",
+              opened_by: operatorId,
+              opened_at: movement.occurred_at,
+              resolved_by: null,
+              resolved_at: null,
+              resolution_note: null,
+            })
+          }
+          appendAudit(state, {
+            actor_id: operatorId,
+            action: input.kind === "quarantine" ? "operation.quarantine" : "operation.seizure",
+            entity_type: "item_lot",
+            entity_id: lot.id,
+            before,
+            after: {
+              status: lot.status,
+              current_location_id: lot.current_location_id,
+              operation_status: "open",
+            },
+            reason: input.motivo ?? null,
+            metadata: { movement_id: movement.id },
+          })
+        }
+        break
+      }
+      case "release": {
+        for (const it of items) {
+          const lot = findLot(state, it.itemLotId)
+          const before = { status: lot.status }
+          lot.status = "released"
+          lot.updated_at = nowIso()
+          for (const op of state.quarantineOps) {
+            if (op.item_lot_id === lot.id && op.status === "open") {
+              op.status = "resolved"
+              op.resolution_note = input.motivo ?? null
+              op.resolved_at = movement.occurred_at
+              op.resolved_by = operatorId
+            }
+          }
+          for (const op of state.seizureOps) {
+            if (op.item_lot_id === lot.id && op.status === "open") {
+              op.status = "resolved"
+              op.resolution_note = input.motivo ?? null
+              op.resolved_at = movement.occurred_at
+              op.resolved_by = operatorId
+            }
+          }
+          appendAudit(state, {
+            actor_id: operatorId,
+            action: "operation.release", // extensión documentada (audit.md no lista release)
+            entity_type: "item_lot",
+            entity_id: lot.id,
+            before,
+            after: { status: "released" },
+            reason: input.motivo ?? null,
+            metadata: { movement_id: movement.id },
+          })
+        }
+        break
+      }
+      case "egress": {
+        if (manifiesto) {
+          if (manifiesto.truck_id) {
+            const truck = state.trucks.find((t) => t.id === manifiesto!.truck_id)
+            if (truck) truck.status = "in_route"
+          }
+          const enCamion = state.lots.filter(
+            (l) => l.manifest_id === input.manifestId && l.current_truck_id === manifiesto!.truck_id,
+          )
+          // Provisional rollup mirror (flows.md Egress): with no on-truck
+          // balance the manifest closes; with balance it stays open.
+          if (enCamion.length === 0) manifiesto.status = "closed"
+          appendAudit(state, {
+            actor_id: operatorId,
+            action: "truck.egress",
+            entity_type: "cargo_manifest",
+            entity_id: input.manifestId ?? "",
+            before: null,
+            after: { status: manifiesto.status, truck_status: "in_route" },
+            reason: input.motivo ?? null,
+            metadata: { movement_id: movement.id },
+          })
+        }
+        break
+      }
+      case "correction": {
+        appendAudit(state, {
+          actor_id: operatorId,
+          action: "movement.correction", // extensión documentada
+          entity_type: "movement",
+          entity_id: String(movement.previous_movement_id ?? ""),
+          before: null,
+          after: { correction_movement_id: movement.id },
+          reason: input.motivo ?? null,
+          metadata: null,
+        })
+        break
+      }
+      default:
+        break
+    }
+    return movement
   }
 
   async crearMovimiento(input: CreateMovementInput): Promise<MovementRow> {
