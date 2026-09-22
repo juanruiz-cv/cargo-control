@@ -236,11 +236,12 @@ export function OperationalCanvas({
                   />
                 ) : null}
 
-                {/* Camiones en playón — one horizontal row INSIDE the playón
-                    sector (bottom edge), wrapping only when the row overflows
-                    the sector width; clipped by the sector box. */}
+                {/* Camiones en playón — column-fill layout INSIDE the playón sector:
+                    starts at the top-left corner, stacks vertically until
+                    the column fills the sector height, then wraps into the
+                    next column to the right. */}
                 {dato.elemento.element_type === "playon" && camionesEnPlayon.length > 0 ? (
-                  <div className="absolute inset-x-1 bottom-1 z-10 flex max-h-[50%] flex-wrap justify-center gap-1 overflow-hidden">
+                  <div className="absolute inset-1 z-10 flex flex-col flex-wrap content-start items-start justify-start gap-1 overflow-hidden">
                     {camionesEnPlayon.map((truck) => {
                       const estado = estadosCamion?.[truck.id] ?? "in_playon"
                       const enfocado = focusedTruckId === truck.id
