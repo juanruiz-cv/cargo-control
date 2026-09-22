@@ -61,12 +61,16 @@ export interface ScannerOpFiltros extends PaginationFiltros {
   itemLotId?: string
   movementId?: number
   resultado?: ScannerResult
+  since?: string // scanned_at >= since (reporte Scanner, fecha de captura)
+  until?: string // scanned_at < until
 }
 
 export interface ScaleOpFiltros extends PaginationFiltros {
   itemLotId?: string
   movementId?: number
   dentroTolerancia?: boolean
+  since?: string // weighed_at >= since (reporte Balanza, fecha de pesaje)
+  until?: string // weighed_at < until
 }
 
 export interface HoldFiltros extends PaginationFiltros {

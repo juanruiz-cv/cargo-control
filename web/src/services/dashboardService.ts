@@ -56,6 +56,14 @@ export interface SerieFiltros {
   dias?: number
   /** movements only: filter by movement kind. */
   kind?: MovementKind
+  /**
+   * Explicit full-day window (Reports, T14): `desde` = inclusive day start,
+   * `hasta` = exclusive upper edge (start of the NEXT day), both ISO
+   * instants. When set, they override `dias`. The dashboard never passes
+   * them — behavior is unchanged without them.
+   */
+  desde?: string
+  hasta?: string
 }
 
 export interface DashboardService {
@@ -114,7 +122,8 @@ export class SupabaseDashboardService implements DashboardService {
     let query = client
       .from(cfg.table)
       .select(cfg.columns)
-      .gte("liquidity_day", ventanaDesde(filtros))
+      .gte("liquidity_day", filtros?.desde ?? ventanaDesde(filtros))
+    if (filtros?.hasta) query = query.lt("liquidity_day", filtros.hasta)
     if (filtros?.kind) query = query.eq("kind", filtros.kind)
     const { data, error } = await query.order("liquidity_day", { ascending: true })
     if (error) throw new Error(`${cfg.table}: ${error.message}`)

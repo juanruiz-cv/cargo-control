@@ -11,16 +11,19 @@
 //   manifest-1 (18/09, truck DEMO-02-BB) — in_playon, partially discharged:
 //     lot-1-1 still loaded on the truck (on_truck)
 //     lot-1-2 under OPEN quarantine at REZAGO (suspected damage)
-//     lot-1-3 discharged and placed at SCANNER-1 PENDING its scan → appears
-//           in the station queue (no scanner_operation row exists yet)
+//     lot-1-3 discharged and placed at SCANNER-1 with a FAILED capture
+//           (result 'error', SBF-05) → still PENDING in the station queue
+//           (the placement movement has no success op yet)
 //   manifest-2 (19/09, truck DEMO-03-CC) — in_playon, cargo under OPEN
-//     judicial seizure at SECUESTRO (legal_ref EXP-JUD-2026-0112)
+//     judicial seizure at SECUESTRO (legal_ref EXP-JUD-2026-0112), with
+//     one uploaded attachment (att-1, the court order PDF)
 //
 // Approximations (documented): cargo_items.status is a SERVER rollup; the
 // seeded values are approximate on purpose (e.g. item-1-2 'discharged' with
 // a quarantined lot, item-2-1 'on_truck' with a seized lot).
 
 import type {
+  AttachmentRow,
   AuditLogRow,
   CargoItemRow,
   CargoManifestRow,
@@ -172,6 +175,8 @@ export interface DemoState {
   scaleOps: ScaleOperationRow[]
   quarantineOps: QuarantineOperationRow[]
   seizureOps: SeizureOperationRow[]
+  /** Attachments (attachments table) — polymorphic refs by entity_type/id. */
+  attachments: AttachmentRow[]
   auditLog: AuditLogRow[]
   /** Floor-plan versions + elements (Fase 4/14, ADR 0015). */
   layouts: LayoutRow[]
@@ -983,6 +988,40 @@ export function createDemoState(): DemoState {
     },
   ]
 
+  // Failed capture for the lot-1-3 placement (SBF-05): the scanner read did
+  // not resolve, so the lot stays PENDING in the station queue — the reporte
+  // Scanner shows the result 'error' row while the queue keeps the lot.
+  const scannerOps: ScannerOperationRow[] = [
+    {
+      id: "scan-op-1",
+      organization_id: DEMO_ORG_ID,
+      movement_id: 2,
+      item_lot_id: "lot-1-3",
+      scanned_code: "TAPA-0001",
+      device_id: "dev-scanner-1",
+      result: "error",
+      payload: null,
+      scanned_at: "2026-09-18T09:55:00.000Z",
+      operator_id: "user-demo",
+    },
+  ]
+
+  // One court-order attachment on the open seizure case (reporte Secuestro
+  // counts documents; the se-1 detail can show the file reference).
+  const attachments: AttachmentRow[] = [
+    {
+      id: "att-1",
+      organization_id: DEMO_ORG_ID,
+      entity_type: "seizure_operation",
+      entity_id: "se-1",
+      storage_path: "secuestros/se-1/resolucion-judicial.pdf",
+      mime: "application/pdf",
+      size: 204_800,
+      uploaded_by: "user-demo",
+      created_at: "2026-09-19T08:00:00.000Z",
+    },
+  ]
+
   const auditLog: AuditLogRow[] = [
     {
       id: 1,
@@ -1067,10 +1106,11 @@ export function createDemoState(): DemoState {
     lots,
     movements,
     movementItems,
-    scannerOps: [],
+    scannerOps,
     scaleOps: [],
     quarantineOps,
     seizureOps,
+    attachments,
     auditLog,
     ...buildLayoutSeed(),
     nextMovementId: 6,

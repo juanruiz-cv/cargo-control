@@ -47,6 +47,38 @@ import {
   computarSerieDemo,
   computarSnapshotOcupacionDemo,
 } from "@/services/demo/dashboardAggregates"
+import {
+  COLUMNAS_BALANZA,
+  COLUMNAS_CAMIONES,
+  COLUMNAS_CARGA,
+  COLUMNAS_INGRESOS_EGRESOS_DETALLE,
+  COLUMNAS_INGRESOS_EGRESOS_RESUMEN,
+  COLUMNAS_MOVIMIENTOS,
+  COLUMNAS_OCUPACION,
+  COLUMNAS_REZAGO,
+  COLUMNAS_SCANNER,
+  COLUMNAS_SECUESTRO,
+  construirColumnasAuditoria,
+  REPORTE_POR_ID,
+  type FilaReporte,
+  type FiltrosReporte,
+  type PaginaReporte,
+  type ReporteId,
+  type ReportService,
+  type ResultadoReporte,
+} from "@/services/reportService"
+import {
+  computarReporteBalanza,
+  computarReporteCamiones,
+  computarReporteCarga,
+  computarReporteMovimientos,
+  computarReporteOcupacion,
+  computarReporteRezago,
+  computarReporteScanner,
+  computarReporteSecuestro,
+  computarResumenIngresosEgresos,
+  demoUsuarios,
+} from "@/services/demo/reportAggregates"
 import type {
   HoldService,
 } from "@/services/holdService"
@@ -1423,6 +1455,8 @@ class DemoScalaStationService implements ScaleStationService {
     if (filtros?.itemLotId) rows = rows.filter((o) => o.item_lot_id === filtros.itemLotId)
     if (filtros?.movementId !== undefined) rows = rows.filter((o) => o.movement_id === filtros.movementId)
     if (filtros?.dentroTolerancia !== undefined) rows = rows.filter((o) => o.within_tolerance === filtros.dentroTolerancia)
+    if (filtros?.since) rows = rows.filter((o) => o.weighed_at >= filtros.since!)
+    if (filtros?.until) rows = rows.filter((o) => o.weighed_at < filtros.until!)
     return clone(applyLimit([...rows].sort((a, b) => b.weighed_at.localeCompare(a.weighed_at)), filtros))
   }
 
@@ -1471,6 +1505,8 @@ class DemoScannerStationService implements ScannerStationService {
     if (filtros?.itemLotId) rows = rows.filter((o) => o.item_lot_id === filtros.itemLotId)
     if (filtros?.movementId !== undefined) rows = rows.filter((o) => o.movement_id === filtros.movementId)
     if (filtros?.resultado) rows = rows.filter((o) => o.result === filtros.resultado)
+    if (filtros?.since) rows = rows.filter((o) => o.scanned_at >= filtros.since!)
+    if (filtros?.until) rows = rows.filter((o) => o.scanned_at < filtros.until!)
     return clone(applyLimit([...rows].sort((a, b) => b.scanned_at.localeCompare(a.scanned_at)), filtros))
   }
 
@@ -2327,6 +2363,162 @@ class DemoLayoutService implements LayoutService {
 }
 
 // ---------------------------------------------------------------------
+// Reports (T14, E10-2) — mirrors the Supabase implementation row for row
+// using the pure aggregates from reportAggregates.ts + the same reusable
+// demo services (trucks/movements/audit) the module already has. Same
+// column arrays and same paginable/agregado contract.
+// ---------------------------------------------------------------------
+
+class DemoReportService implements ReportService {
+  private readonly state: DemoState
+  private readonly trucks: DemoTruckService
+  private readonly movements: DemoMovementService
+  private readonly audit: DemoAuditService
+
+  constructor(state: DemoState) {
+    this.state = state
+    this.trucks = new DemoTruckService(state)
+    this.movements = new DemoMovementService(state)
+    this.audit = new DemoAuditService(state)
+  }
+
+  private require(reporte: ReporteId, accion: string): void {
+    const config = REPORTE_POR_ID.get(reporte)
+    if (!config) throw demoError(`reporte desconocido: ${reporte}`)
+    requirePermission(this.state, config.permiso, accion)
+  }
+
+  async generar(reporte: ReporteId, filtros?: FiltrosReporte, pagina?: PaginaReporte): Promise<ResultadoReporte> {
+    switch (reporte) {
+      case "camiones":
+        return this.reporteCamiones(filtros, pagina)
+      case "ingresosEgresos":
+        return this.reporteIngresosEgresos(filtros)
+      case "carga":
+        return this.reporteCarga(filtros, pagina)
+      case "movimientos":
+        return this.reporteMovimientos(filtros)
+      case "ocupacion":
+        return this.reporteOcupacion()
+      case "scanner":
+        return this.reporteScanner(filtros, pagina)
+      case "balanza":
+        return this.reporteBalanza(filtros, pagina)
+      case "rezago":
+        return this.reporteRezago(filtros, pagina)
+      case "secuestro":
+        return this.reporteSecuestro(filtros, pagina)
+      case "auditoria":
+        return this.reporteAuditoria(filtros, pagina)
+    }
+  }
+
+  private async reporteCamiones(filtros?: FiltrosReporte, pagina?: PaginaReporte): Promise<ResultadoReporte> {
+    this.require("camiones", "reporte de camiones")
+    const { filas, total } = computarReporteCamiones(this.state, filtros, pagina)
+    return { columnas: COLUMNAS_CAMIONES, filas, total, agregado: false, paginable: true }
+  }
+
+  private async reporteIngresosEgresos(filtros?: FiltrosReporte): Promise<ResultadoReporte> {
+    this.require("ingresosEgresos", "reporte de ingresos/egresos")
+    if (filtros?.placa) {
+      const camiones = await this.trucks.listar({ buscar: filtros.placa, limit: 5 })
+      const camion = camiones[0]
+      if (!camion) {
+        return { columnas: COLUMNAS_INGRESOS_EGRESOS_DETALLE, filas: [], total: 0, agregado: false, paginable: false }
+      }
+      const movimientos = await this.movements.listarMovimientos({
+        camionId: camion.id,
+        since: filtros.desde,
+        until: filtros.hasta,
+        limit: 500,
+      })
+      const usuarios = demoUsuarios(this.state)
+      const filas: FilaReporte[] = movimientos.map((m) => ({
+        fecha: m.occurred_at,
+        placa: camion.plate,
+        tipo: m.kind,
+        operador: m.operator_id ? (usuarios.get(m.operator_id) ?? m.operator_id) : "—",
+      }))
+      return { columnas: COLUMNAS_INGRESOS_EGRESOS_DETALLE, filas, total: filas.length, agregado: false, paginable: false }
+    }
+    const filas = computarResumenIngresosEgresos(this.state, filtros)
+    return { columnas: COLUMNAS_INGRESOS_EGRESOS_RESUMEN, filas, total: filas.length, agregado: true, paginable: false }
+  }
+
+  private async reporteCarga(filtros?: FiltrosReporte, pagina?: PaginaReporte): Promise<ResultadoReporte> {
+    this.require("carga", "reporte de carga")
+    const { filas, total } = computarReporteCarga(this.state, filtros, pagina)
+    return { columnas: COLUMNAS_CARGA, filas, total, agregado: false, paginable: true }
+  }
+
+  private async reporteMovimientos(filtros?: FiltrosReporte): Promise<ResultadoReporte> {
+    this.require("movimientos", "reporte de movimientos")
+    const filas = computarReporteMovimientos(this.state, filtros)
+    return { columnas: COLUMNAS_MOVIMIENTOS, filas, total: filas.length, agregado: true, paginable: false }
+  }
+
+  private async reporteOcupacion(): Promise<ResultadoReporte> {
+    this.require("ocupacion", "reporte de ocupación")
+    const { filas, total } = computarReporteOcupacion(this.state)
+    return { columnas: COLUMNAS_OCUPACION, filas, total, agregado: true, paginable: false }
+  }
+
+  private async reporteScanner(filtros?: FiltrosReporte, pagina?: PaginaReporte): Promise<ResultadoReporte> {
+    this.require("scanner", "reporte de scanner")
+    const { filas, total } = computarReporteScanner(this.state, filtros, pagina)
+    return { columnas: COLUMNAS_SCANNER, filas, total, agregado: false, paginable: true }
+  }
+
+  private async reporteBalanza(filtros?: FiltrosReporte, pagina?: PaginaReporte): Promise<ResultadoReporte> {
+    this.require("balanza", "reporte de balanza")
+    const { filas, total } = computarReporteBalanza(this.state, filtros, pagina)
+    return { columnas: COLUMNAS_BALANZA, filas, total, agregado: false, paginable: true }
+  }
+
+  private async reporteRezago(filtros?: FiltrosReporte, pagina?: PaginaReporte): Promise<ResultadoReporte> {
+    this.require("rezago", "reporte de rezago")
+    const { filas, total } = computarReporteRezago(this.state, filtros, pagina)
+    return { columnas: COLUMNAS_REZAGO, filas, total, agregado: false, paginable: true }
+  }
+
+  private async reporteSecuestro(filtros?: FiltrosReporte, pagina?: PaginaReporte): Promise<ResultadoReporte> {
+    this.require("secuestro", "reporte de secuestro")
+    const { filas, total } = computarReporteSecuestro(this.state, filtros, pagina)
+    return { columnas: COLUMNAS_SECUESTRO, filas, total, agregado: false, paginable: true }
+  }
+
+  private async reporteAuditoria(filtros?: FiltrosReporte, pagina?: PaginaReporte): Promise<ResultadoReporte> {
+    this.require("auditoria", "reporte de auditoría")
+    const page = Math.floor((pagina?.offset ?? 0) / (pagina?.limit ?? 25)) + 1
+    const pageSize = Math.max(1, pagina?.limit ?? 25)
+    const [resultado, acciones, actores] = await Promise.all([
+      this.audit.listarAudit(
+        { action: filtros?.accion, since: filtros?.desde, until: filtros?.hasta },
+        { page, pageSize },
+      ),
+      this.audit.obtenerCatalogoAcciones(),
+      this.audit.obtenerActores(),
+    ])
+    const actorNombre = new Map(actores.map((a) => [a.id, a.nombre]))
+    const filas: FilaReporte[] = resultado.filas.map((fila) => ({
+      id: fila.id,
+      fecha: fila.created_at,
+      usuario: fila.actor_id ? (actorNombre.get(fila.actor_id) ?? fila.actor_id) : "sistema",
+      accion: fila.action,
+      entidad: fila.entity_type ? `${fila.entity_type}${fila.entity_id ? ` #${fila.entity_id}` : ""}` : "—",
+    }))
+    return {
+      columnas: construirColumnasAuditoria(acciones),
+      filas,
+      total: resultado.total,
+      agregado: false,
+      paginable: true,
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------
 
@@ -2343,6 +2535,7 @@ export interface DemoServices {
   audit: AuditService
   dashboard: DashboardService
   layouts: LayoutService
+  reportes: ReportService
 }
 
 export function createDemoServices(options: DemoServiceOptions = {}): DemoServices {
@@ -2362,5 +2555,6 @@ export function createDemoServices(options: DemoServiceOptions = {}): DemoServic
     audit: new DemoAuditService(state),
     dashboard: new DemoDashboardService(state),
     layouts: new DemoLayoutService(state),
+    reportes: new DemoReportService(state),
   }
 }

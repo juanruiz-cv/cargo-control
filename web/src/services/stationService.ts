@@ -138,6 +138,8 @@ class SupabaseScannerStationService implements ScannerStationService {
     if (filtros?.itemLotId) query = query.eq("item_lot_id", filtros.itemLotId)
     if (filtros?.movementId !== undefined) query = query.eq("movement_id", filtros.movementId)
     if (filtros?.resultado) query = query.eq("result", filtros.resultado)
+    if (filtros?.since) query = query.gte("scanned_at", filtros.since)
+    if (filtros?.until) query = query.lt("scanned_at", filtros.until)
 
     query = query.order("scanned_at", { ascending: false })
     query = applyWindow(query, filtros)
@@ -214,6 +216,8 @@ class SupabaseScaleStationService implements ScaleStationService {
     if (filtros?.itemLotId) query = query.eq("item_lot_id", filtros.itemLotId)
     if (filtros?.movementId !== undefined) query = query.eq("movement_id", filtros.movementId)
     if (filtros?.dentroTolerancia !== undefined) query = query.eq("within_tolerance", filtros.dentroTolerancia)
+    if (filtros?.since) query = query.gte("weighed_at", filtros.since)
+    if (filtros?.until) query = query.lt("weighed_at", filtros.until)
 
     query = query.order("weighed_at", { ascending: false })
     query = applyWindow(query, filtros)

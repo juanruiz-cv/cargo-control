@@ -35,13 +35,29 @@ export function dayBucketKey(iso: string): string {
   return `${y}-${m}-${dd}`
 }
 
-/** Same window bound as dashboardService.ventanaDesde: bucket(now-(dias-1)). */
-export function ventanaDemo(filtros: SerieFiltros | undefined): string {
+/**
+ * Window bound for a series — the pure twin of dashboardService
+ * ventanaDesde + the Reports extension (T14):
+ *   - default: bucket(now-(dias-1)) like the Supabase path;
+ *   - `filtros.desde`/`filtros.hasta` (ISO instants, Reports) override the
+ *     window: desde = inclusive day start, hasta = exclusive upper edge
+ *     (start of the next day). Returns calendar-day keys for dayBucketKey
+ *     comparisons; `hasta` is null when open-ended.
+ */
+export function ventanaDemo(filtros: SerieFiltros | undefined): { desde: string; hasta: string | null } {
+  if (filtros?.desde !== undefined) {
+    const desde = dayBucketKey(filtros.desde)
+    const hasta =
+      filtros?.hasta !== undefined
+        ? dayBucketKey(new Date(new Date(filtros.hasta).getTime() - 1).toISOString())
+        : null
+    return { desde, hasta }
+  }
   const dias = Math.max(1, Math.min(filtros?.dias ?? 30, 90))
   const inicio = new Date()
   inicio.setDate(inicio.getDate() - (dias - 1))
   inicio.setHours(0, 0, 0, 0)
-  return dayBucketKey(inicio.toISOString())
+  return { desde: dayBucketKey(inicio.toISOString()), hasta: null }
 }
 
 // ---------------------------------------------------------------------
@@ -218,9 +234,12 @@ export function computarSerieDemo(
   tipo: SerieTipo,
   filtros?: SerieFiltros,
 ): SerieFila[] {
-  const desde = ventanaDemo(filtros)
+  const { desde, hasta } = ventanaDemo(filtros)
 
-  const enVentana = (mv: MovementRow): boolean => dayBucketKey(mv.occurred_at) >= desde
+  const enVentana = (mv: MovementRow): boolean => {
+    const dia = dayBucketKey(mv.occurred_at)
+    return dia >= desde && (hasta === null || dia <= hasta)
+  }
 
   const etapas: SerieFila[] = []
   if (tipo === "arrivals") {

@@ -32,6 +32,8 @@ import type { LayoutService } from "@/services/layoutService"
 import { SupabaseLayoutService } from "@/services/layoutService"
 import type { MovementService } from "@/services/movementService"
 import { SupabaseMovementService } from "@/services/movementService"
+import type { ReportService } from "@/services/reportService"
+import { SupabaseReportService } from "@/services/reportService"
 import type { StationService } from "@/services/stationService"
 import { SupabaseStationService } from "@/services/stationService"
 import type { TruckService } from "@/services/truckService"
@@ -50,6 +52,8 @@ export interface Services {
   audit: AuditService
   dashboard: DashboardService
   layouts: LayoutService
+  /** Reports module (T14, E10-2) — aggregated/bounded server-side reads. */
+  reportes: ReportService
 }
 
 export function createSupabaseServices(client: SupabaseClient): Services {
@@ -65,6 +69,7 @@ export function createSupabaseServices(client: SupabaseClient): Services {
     audit: new SupabaseAuditService(client),
     dashboard: new SupabaseDashboardService(client),
     layouts: new SupabaseLayoutService(client),
+    reportes: new SupabaseReportService(client),
   }
 }
 
