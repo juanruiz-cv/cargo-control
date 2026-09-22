@@ -91,13 +91,14 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile }: SidebarProps) 
                   </p>
                   <ul className="space-y-0.5">
                     {group.items.map((item) => (
-                      <SidebarNavItem
-                        key={item.path}
-                        item={item}
-                        collapsed={collapsed}
-                        onNavigate={onCloseMobile}
-                      />
-                    ))}
+                  <li key={item.path} className={cn(collapsed && "w-full")}>
+                    <SidebarNavItem
+                      item={item}
+                      collapsed={collapsed}
+                      onNavigate={onCloseMobile}
+                    />
+                  </li>
+                ))}
                   </ul>
                 </li>
               ))}
@@ -125,6 +126,7 @@ function SidebarNavItem({
   const link = (
     <NavLink
       to={item.path}
+      end={item.end}
       onClick={onNavigate}
       aria-keyshortcuts={item.keyshortcut}
       className={({ isActive }) =>
@@ -133,7 +135,7 @@ function SidebarNavItem({
           isActive
             ? "bg-primary text-primary-foreground"
             : "text-muted-foreground hover:bg-muted hover:text-foreground",
-          collapsed && "justify-center px-0",
+          collapsed && "w-full justify-center px-0",
         )
       }
     >

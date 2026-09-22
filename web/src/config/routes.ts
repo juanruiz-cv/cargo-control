@@ -102,6 +102,13 @@ export interface NavItem {
   label: string
   path: string
   icon: LucideIcon
+  /**
+   * Exact match for the NavLink active state. Use when this path is a
+   * prefix of another registered route (e.g. Configuración `/settings`
+   * vs Planos `/settings/layouts`) so the parent is not highlighted
+   * while a child route is active.
+   */
+  end?: boolean
   /** Documented in professional-ux.md §1 (global keyboard navigation). */
   keyshortcut?: string
   /**
@@ -212,6 +219,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Configuración",
         path: ROUTES.settings,
         icon: SettingsIcon,
+        end: true,
       },
     ],
   },
