@@ -111,7 +111,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T16 | SEO: public pages only (/, /login, /about, /help, /contact), robots.txt, sitemap, OG, noindex internal routes | direct inline (subagent transport unavailable — free tier) | done (a71e18b; router-root Seo.tsx index-only PUBLIC_SEO routes, fail-closed noindex static+cleanup, index.html noindex default, PublicLayout+About/Help/Contact pages, robots.txt allowlist, sitemap.xml; SITE_URL placeholder cargo-control.example.com in config/seo.ts; "/" excluded from sitemap — client-redirects; risk medium, build+tsc+lint OK) |
 | T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | direct inline (subagent transport unavailable — free tier) | in_progress — Tanda 1 (0029cac): vitest 4 + testing-library + jsdom; 102 tests lib/hooks/map + fix 2 bugs prod (zoomAtPoint, guardI5Estado). Tanda 2 (e7083f2): 121 tests — motor demo (RBAC viewer, ME-07 idempotencia, discharge/split/transfer/egress, egress con retenidos AC-E2-2, arrival previo, audit trail), agregados dashboard/reportes (golden: stored 800u/4030kg, holds 50+200, scan 30, sector-01=500u). Tanda 3 (8093149): auth (login/roles/permisos, credenciales malas, sign-out, operator pin), holds (open view, resolve quarantine, engine release resuelve op + lot released + caso cerrado). Tanda 4 (1696916): stations (cola scan seed, scan_in → checked, SBF-05 no avanza, escala), layout diffs puros + versiones demo (create/publicar/restaurar), LoginPage RTL (demo button, errores inline, redirect), kpiCards (gating por permiso, formato es-AR). Tanda 5 (3d651f4): DashboardPage RTL (KPIs demo real, charts, ocupación, refresh, gating sin permisos), ManifestList RTL (seed, búsqueda, Nuevo con cargo.create). 167 tests / 19 archivos. Falta: RLS (requiere supabase local — NO instalado) |
 | T18 | Performance: lazy loading, code splitting, pagination, debounce, memoization, aggregations, map partial updates | delegated | done (c90c9df; route-level React.lazy en router.tsx — ~30 páginas code-split, fallback PageLoading; manualChunks 'vendor-react' separa react/react-dom/react-router; chunkSizeWarningLimit 700. Bundle 1.374 kB → index 581 kB + vendor 313 kB (gzip 152 + 99 kB); pagination/debounce/memoization/aggregations ya implementados incrementalmente en fases previas — PAGE_SIZE en reports/audit, useDebouncedValue 300ms en listas, useMemo/useCallback en 15+ archivos, reportService agrega server-side, mapa con useMemo bounds; 202 tests verdes + tsc/lint/build green) |
-| T19 | Final audit: documentation vs implementation report (senior arch/front/back/QA/UX/security), then fix findings | delegated | pending |
+| T19 | Final audit: documentation vs implementation report (senior arch/front/back/QA/UX/security), then fix findings | inline | done (b8d507f) |
 | T20 | Map truck finder: right-side panel with debounced plate/company search listing every truck with its derived location, click centers the map on its chip; chip follows derived state to owning sector (playón/balanza/scanner/rezago/secuestro) | delegated | done (1d05c4c + refinements: 879588f chips inside sector, a49734a column-fill top-left, 8a2e7ff chip follows derived state) |
 
 ## Progress
@@ -291,10 +291,31 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 
 ## Next step
 
-T17 frontend completo (202 tests) y T18 Performance done. Siguiente: RLS/isolation
-pendiente hasta instalar supabase CLI + Docker (docs/qa/strategy.md «Database /
-Isolation»), o directamente T19 Final audit (documentation vs implementation
-report, luego fix findings).
+T17 frontend completo (202 tests), T18 Performance done, T19 Final audit done.
+Pendiente: RLS/isolation hasta instalar supabase CLI + Docker
+(docs/qa/strategy.md «Database / Isolation»). Roadmap de web app completo salvo
+esa capa.
+
+## T19 audit report (final)
+
+- Rutas/guards: guard table de authentication.md §6 == ROUTE_PERMISSIONS (UX
+  only; RLS backstop documentado). Coherente.
+- Audit action catalog: 16 base + 3 layout (ADR 0015) == auditService (19).
+- Movement kinds: 15 en enums.ts == architecture/movement-engine.md.
+- Guardas I1..I7 == flows.md guard table (reimplementadas en lib/movement-guards.ts).
+- kind→permission: MOVEMENT_KIND_PERMISSION == authorization.md helper SQL.
+- Design tokens: --cc-* en index.css + config/tokens.ts == brand/design-tokens.md.
+- Estados/dominio: TruckStatus/CargoItemStatus/ItemLotStatus/ScannerResult/
+  LayoutStatus/LocationType == domain/states.md.
+- Dashboard Fase 12 cards == architecture/operational-dashboard.md (36 card/kpi usages).
+- QA test specs (OM-*/ME-*/T-*/SA-*) documentadas como SQL/E2E vs Supabase —
+  no ejecutables hasta la capa DB; equivalencia RTL/puros en web.
+- **Finding arreglado**: trazabilidad acceptance-criteria.md ↔ tests era casi
+  nula (solo AC-E2-2 mal etiquetado en un describe de egress). Anotados AC-
+  E2-2/E3-1/E3-4/E5-2/E6-2/E7-2/E8-3/E9-2 en los tests que ya cubren cada
+  escenario (movement-guards, adapters, ScalePage, holdsPages); + timeouts 15 s
+  en 3 tests flaky (ScannerPage×2, holdsPages).
+- Cobertura real: 202 tests / 28 files verdes post-fix.
 
 ## Route declarations
 
