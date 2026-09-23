@@ -109,7 +109,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T14 | Reports: truck/entries/exits/cargo/movements/occupancy/scanner/scale/quarantine/seizure/audit, filters + CSV export | delegated | done (2fa99b3) |
 | T15 | Responsive: desktop-first, tablet (icon rail, data preserved, write path identical), breakpoints via tokens | direct inline (subagent transport unavailable — free tier) | done (dd261a1; tablet 768–1023 forced 56px icon rail via effectiveCollapsed, burger md:hidden, overlay md:hidden, desktop collapse pref untouched, no localStorage writes during tablet range; risk medium, build+tsc+lint OK, md: utilities verified in production CSS) |
 | T16 | SEO: public pages only (/, /login, /about, /help, /contact), robots.txt, sitemap, OG, noindex internal routes | direct inline (subagent transport unavailable — free tier) | done (a71e18b; router-root Seo.tsx index-only PUBLIC_SEO routes, fail-closed noindex static+cleanup, index.html noindex default, PublicLayout+About/Help/Contact pages, robots.txt allowlist, sitemap.xml; SITE_URL placeholder cargo-control.example.com in config/seo.ts; "/" excluded from sitemap — client-redirects; risk medium, build+tsc+lint OK) |
-| T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | direct inline (subagent transport unavailable — free tier) | in_progress — Tanda 1 (0029cac): vitest 4 + testing-library + jsdom; 102 tests lib/hooks/map + fix 2 bugs prod (zoomAtPoint, guardI5Estado). Tanda 2 (e7083f2): 121 tests — motor demo (RBAC viewer, ME-07 idempotencia, discharge/split/transfer/egress, egress con retenidos AC-E2-2, arrival previo, audit trail), agregados dashboard/reportes (golden: stored 800u/4030kg, holds 50+200, scan 30, sector-01=500u). Tanda 3 (8093149): auth (login/roles/permisos, credenciales malas, sign-out, operator pin), holds (open view, resolve quarantine, engine release resuelve op + lot released + caso cerrado). 128 tests / 14 archivos. Falta: layoutService, stationService (scanner/scale), páginas RTL, RLS (requiere supabase local — NO instalado) |
+| T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | direct inline (subagent transport unavailable — free tier) | in_progress — Tanda 1 (0029cac): vitest 4 + testing-library + jsdom; 102 tests lib/hooks/map + fix 2 bugs prod (zoomAtPoint, guardI5Estado). Tanda 2 (e7083f2): 121 tests — motor demo (RBAC viewer, ME-07 idempotencia, discharge/split/transfer/egress, egress con retenidos AC-E2-2, arrival previo, audit trail), agregados dashboard/reportes (golden: stored 800u/4030kg, holds 50+200, scan 30, sector-01=500u). Tanda 3 (8093149): auth (login/roles/permisos, credenciales malas, sign-out, operator pin), holds (open view, resolve quarantine, engine release resuelve op + lot released + caso cerrado). Tanda 4 (1696916): stations (cola scan seed, scan_in → checked, SBF-05 no avanza, escala), layout diffs puros + versiones demo (create/publicar/restaurar), LoginPage RTL (demo button, errores inline, redirect), kpiCards (gating por permiso, formato es-AR). 155 tests / 17 archivos. Falta: páginas RTL (dashboard, manifests), RLS (requiere supabase local — NO instalado) |
 | T18 | Performance: lazy loading, code splitting, pagination, debounce, memoization, aggregations, map partial updates | delegated | pending |
 | T19 | Final audit: documentation vs implementation report (senior arch/front/back/QA/UX/security), then fix findings | delegated | pending |
 | T20 | Map truck finder: right-side panel with debounced plate/company search listing every truck with its derived location, click centers the map on its chip; chip follows derived state to owning sector (playón/balanza/scanner/rezago/secuestro) | delegated | done (1d05c4c + refinements: 879588f chips inside sector, a49734a column-fill top-left, 8a2e7ff chip follows derived state) |
@@ -213,13 +213,37 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   computarSerieDemo(state, tipo, filtros) devuelve SerieFila[] (no
   objeto); DEMO_FACILITY_ID='fac-demo'; ManifestInsert requiere
   facility_id. TSC+lint+build green, risk medium.
+- 2026-09-23 (sesión tests): T17 tanda 4 (1696916). Stations + layout
+  (stationsLayout.test.ts, 14 tests): obtenerColaPendiente seed (lot-1-3
+  discharged en loc-scanner → queue_kind 'scan'), scan_in success → op +
+  lot status 'checked'; SBF-05 no-succeso (not_found) → fila append-only,
+  lot queda 'discharged' (no avanza); escala (escala.crearOperacionEscala
+  — el campo del servicio es 'escala', no 'scale') with within_tolerance;
+  layout: claveEstableLayoutElement (place:location vs visual:name,
+  case-insensitive, null sin name), computarDiffLayout puro (added/
+  removed/changed con identidad estable entre versiones, diff vacío,
+  1 cambio por campo, CAMPOS_DIFF_LAYOUT = 10 campos), crearVersion copia
+  base publicada (version = max todas +1 — seed tiene v1 published + v2
+  draft → v3), publicarVersion archiva la previa publicada (queda 1
+  published), restaurarVersion → draft copia con description
+  'Restaurado desde versión N'. Página LoginPage.test.tsx (7 tests RTL,
+  mock useAuth + MemoryRouter): demo surface + botón DEMO, errores inline
+  submit vacío, email inválido → aria-invalid, signIn(email,password),
+  DEMO button usa DEMO_EMAIL/DEMO_PASSWORD, error credenciales →
+  Alert destructivo, sesión existente → Navigate a dashboard (heading
+  real es 'Cargo Control', no role=heading). kpiCards.test.ts (6 tests
+  puros): 10 cards orden fijo; formato es-AR (4.030 kg, 'de 10');
+  kpisVisibles: base warehouse.read + permiso módulo (truck/cargo/
+  scanner/scale/quarantine/seizure) — card sin permiso se oculta, nunca
+  se cero. 155 tests / 17 archivos. Tipos: LayoutFiltros usa
+  facilidadId; ComputarDiffLayoutContext usa facilityId; AuthContextValue
+  vive en auth-context (no useAuth). TSC+lint+build green, risk medium.
 
 ## Next step
 
-T17 — tanda 4: layoutService (diff, versiones, publicar/restaurar),
-stationService (scan/scale con operation_key), páginas clave con Testing
-Library (login DEMO, dashboard, manifests). La capa RLS/isolation queda
-pendiente hasta instalar supabase CLI + Docker (ver
+T17 — tanda 5: páginas RTL restantes (DashboardPage con mock de charts o
+kpisVisibles ya cubierto — next: DashboardCharts smoke o manifests),
+luego RLS/isolation pendiente hasta instalar supabase CLI + Docker (ver
 docs/qa/strategy.md «Database / Isolation»). Después T18 Performance →
 T19 Final audit.
 
