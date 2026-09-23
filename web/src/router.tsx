@@ -1,15 +1,20 @@
 import type { ReactNode } from "react"
-import { createBrowserRouter, Navigate } from "react-router-dom"
+import { createBrowserRouter, Navigate, Outlet } from "react-router-dom"
 
 import { RequireAuth } from "@/components/auth/RequireAuth"
 import { RequirePermission } from "@/components/auth/RequirePermission"
 import { AppShell } from "@/components/layout/AppShell"
+import { PublicLayout } from "@/components/layout/PublicLayout"
+import { Seo } from "@/components/seo/Seo"
 import { ROUTES, ROUTE_PERMISSIONS } from "@/config/routes"
+import { AboutPage } from "@/pages/AboutPage"
 import { AuditPage } from "@/pages/AuditPage"
 import { CargoPage } from "@/pages/CargoPage"
+import { ContactPage } from "@/pages/ContactPage"
 import { DashboardPage } from "@/pages/DashboardPage"
 import { ForbiddenPage } from "@/pages/ForbiddenPage"
 import { ForgotPasswordPage } from "@/pages/ForgotPasswordPage"
+import { HelpPage } from "@/pages/HelpPage"
 import { LoginPage } from "@/pages/LoginPage"
 import { MovementsPage } from "@/pages/MovementsPage"
 import { NotFoundPage } from "@/pages/NotFoundPage"
@@ -51,18 +56,38 @@ function withModulePermission({ route, children }: { route: string; children: Re
 }
 
 export const router = createBrowserRouter([
-  { path: ROUTES.login, element: <LoginPage /> },
-  { path: ROUTES.forgotPassword, element: <ForgotPasswordPage /> },
-  { path: ROUTES.resetPassword, element: <ResetPasswordPage /> },
-  { path: ROUTES.forbidden, element: <ForbiddenPage /> },
+  // Router-root <Seo />: one head manager for EVERY route — index only
+  // for routes declared in PUBLIC_SEO, fail-closed noindex otherwise
+  // (T16). Pathless layout; children own all real paths.
   {
-    path: "/",
     element: (
-      <RequireAuth>
-        <AppShell />
-      </RequireAuth>
+      <>
+        <Seo />
+        <Outlet />
+      </>
     ),
     children: [
+      // Public pages (no session required): /about, /help, /contact.
+      {
+        element: <PublicLayout />,
+        children: [
+          { path: ROUTES.about, element: <AboutPage /> },
+          { path: ROUTES.help, element: <HelpPage /> },
+          { path: ROUTES.contact, element: <ContactPage /> },
+        ],
+      },
+      { path: ROUTES.login, element: <LoginPage /> },
+      { path: ROUTES.forgotPassword, element: <ForgotPasswordPage /> },
+      { path: ROUTES.resetPassword, element: <ResetPasswordPage /> },
+      { path: ROUTES.forbidden, element: <ForbiddenPage /> },
+      {
+        path: "/",
+        element: (
+          <RequireAuth>
+            <AppShell />
+          </RequireAuth>
+        ),
+        children: [
       { index: true, element: <Navigate to={ROUTES.dashboard} replace /> },
       { path: ROUTES.dashboard, element: <DashboardPage /> },
       {
@@ -145,6 +170,8 @@ export const router = createBrowserRouter([
         element: withModulePermission({ route: ROUTES.layoutEditor, children: <LayoutEditorPage /> }),
       },
       { path: ROUTES.notFound, element: <NotFoundPage /> },
+      ],
+      },
     ],
   },
 ])

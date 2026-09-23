@@ -1,0 +1,29 @@
+# Cargo Control — SEO crawl policy (T16).
+# Only the public surface declared in web/src/config/seo.ts is indexable.
+# Everything else is noindex via the router-root <Seo />; robots.txt is
+# the non-JS-crawler gate. Keep Disallow entries in sync with ROUTES.
+# Sitemap host mirrors SITE_URL in web/src/config/seo.ts.
+
+User-agent: *
+Allow: /$
+Allow: /login$
+Allow: /about$
+Allow: /help$
+Allow: /contact$
+Disallow: /dashboard
+Disallow: /map
+Disallow: /trucks
+Disallow: /cargo
+Disallow: /warehouse
+Disallow: /scanner
+Disallow: /scale
+Disallow: /quarantine
+Disallow: /seizure
+Disallow: /movements
+Disallow: /reports
+Disallow: /audit
+Disallow: /settings
+Disallow: /auth/
+Disallow: /403
+
+Sitemap: https://cargo-control.example.com/sitemap.xml
