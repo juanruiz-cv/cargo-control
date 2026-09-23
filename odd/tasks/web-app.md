@@ -254,14 +254,27 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   máximo); OcupacionBars es role="table"; ManifestStatusBadge rollup usa
   mismo label que MANIFEST_STATUS_LABELS. TSC+lint+build green, risk
   medium.
+- T17 — tanda 6 done (8cedb11): RTL pages operaciones con demo backend real
+  (getServices() singleton, useAuth mockeado): ScannerPage.test.tsx (4),
+  ScalePage.test.tsx (4; seed NO tiene lotes en loc-balanza → sembrar con
+  svc.cargo.transferItem({ itemLotId:'lot-1-3', destinoLocationId:
+  'loc-balanza', operationKey }) ANTES de render — la página no recarga sola),
+  MovementsPage.test.tsx (3; labels MOVEMENT_KIND_LABELS 'Descarga',
+  gating Registrar movimiento con MOVEMENT_KIND_PERMISSION), holdsPages.test.tsx
+  (6; QuarantinePage qu-1/lot-1-2 'Sospecha de daño en embalaje',
+  SeizurePage se-1/lot-2-1 EXP-JUD-2026-0112; Resolver solo admin/supervisor
+  (button 'Resolver caso' dentro del dialog, nota obligatoria); sin permiso →
+  ErrorState sin data leak). Gotchas: lotes/IDs/reasons aparecen en caso Y
+  historial append-only → findAllByText/queryAllByText, nunca getByText.
+  184 tests / 23 archivos. TSC+lint+build green (warnings preexistentes),
+  risk medium, 400 líneas.
 
 ## Next step
 
-T17 — tanda 6: cubrir las páginas de operaciones que quedan con RTL
-(ScannerPage, ScalePage, MovementsPage, QuarantinePage/SeizurePage) con
-el demo backend real, luego RLS/isolation pendiente hasta instalar
-supabase CLI + Docker (ver docs/qa/strategy.md «Database / Isolation»).
-Después T18 Performance → T19 Final audit.
+T17 — tanda 7 (opcional): RTL restante (WarehousePage layout, TrucksPage,
+CargoPage, ReportsPage/AuditPage, SettingsPage), luego RLS/isolation
+pendiente hasta instalar supabase CLI + Docker (ver docs/qa/strategy.md
+«Database / Isolation»). Después T18 Performance → T19 Final audit.
 
 ## Route declarations
 
