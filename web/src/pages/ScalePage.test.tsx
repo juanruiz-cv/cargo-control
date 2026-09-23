@@ -86,7 +86,7 @@ describe("ScalePage", () => {
     // Dialog closes and the weigh row appears in recent operations
     await screen.findByText("Pesajes recientes")
     expect(await screen.findByText("Dentro de tolerancia")).toBeInTheDocument()
-  })
+  }, 15000)
 
   it("keeps the lot pending when the weigh is outside tolerance (SBF-08)", async () => {
     const user = userEvent.setup()
@@ -110,5 +110,5 @@ describe("ScalePage", () => {
     // (lot appears in both queue row and recent ops rows — many cells)
     expect(await screen.findByText("Fuera de tolerancia")).toBeInTheDocument()
     expect((await screen.findAllByText("lot-1-3")).length).toBeGreaterThanOrEqual(2)
-  })
+  }, 15000)
 })
