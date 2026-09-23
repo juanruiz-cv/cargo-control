@@ -15,7 +15,7 @@ earlier):
 | `0001_schema.sql` | 25 business tables + constraints + indexes (already includes `checks` for enum-style columns; append-only spines use `bigint identity`) |
 | `0002_rbac_seed.sql` | RBAC catalog seed: 7 roles, 20-permission catalog, roles↔permissions matrix (77 rows) |
 | `0003_authorization_helpers.sql` | `has_permission`, `has_role`, `movement_kind_permitted`, `handle_new_auth_user` + `auth.users` signup trigger |
-| `0004_rls.sql` | Row Level Security on every business table (default deny) + 67 policies |
+| `0004_rls.sql` | Row Level Security on every business table (default deny) + 66 policies |
 | `0005_views.sql` | Derived read-side views (`security_invoker`, RLS applies): `location_occupancy`, `station_queue`, `hold_open`, `dashboard_metrics`, `dashboard_series_*`, `dashboard_occupancy_snapshot` |
 | `0006_triggers.sql` | Shared `updated_at` trigger, ADR 0003 deferred quantity-balance constraint trigger, ADR 0006 capacity guards + `capacity.set` audit trigger |
 
@@ -60,3 +60,17 @@ Migrations were **not executed** in this repository (no Supabase CLI / Docker
 / `psql` available in the authoring environment); they were verified
 statically (structure review, identifier cross-checks, counts). Run them
 against a scratch project before the first real deploy.
+
+Static audit (T19 Final audit, 2026-09-23) cross-checked:
+- 0001: 25 tables; every table referenced by policies/views/triggers exists.
+- 0002: 7 roles, 20 permissions, 77 role_permissions rows (admin 20 /
+  supervisor 19 / operator 13 / scanner_operator 5 / scale_operator 5 /
+  auditor 8 / viewer 7) — matches rbac.md §3.
+- 0003: helpers defined once (`has_permission`, `has_role`,
+  `movement_kind_permitted`, `handle_new_auth_user`); all permissions used
+  by 0004 exist in the 0002 catalog.
+- 0004: 66 `create policy` statements (was misreported as 67; fixed); all 25
+  tables have RLS enabled.
+- 0005: 10 derived views (`security_invoker`) over tables existing in 0001.
+- 0006: 4 guard/audit/balance functions + `set_updated_at`; 19 trigger
+  statements on tables existing in 0001.
