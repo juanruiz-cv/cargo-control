@@ -109,7 +109,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T14 | Reports: truck/entries/exits/cargo/movements/occupancy/scanner/scale/quarantine/seizure/audit, filters + CSV export | delegated | done (2fa99b3) |
 | T15 | Responsive: desktop-first, tablet (icon rail, data preserved, write path identical), breakpoints via tokens | direct inline (subagent transport unavailable — free tier) | done (dd261a1; tablet 768–1023 forced 56px icon rail via effectiveCollapsed, burger md:hidden, overlay md:hidden, desktop collapse pref untouched, no localStorage writes during tablet range; risk medium, build+tsc+lint OK, md: utilities verified in production CSS) |
 | T16 | SEO: public pages only (/, /login, /about, /help, /contact), robots.txt, sitemap, OG, noindex internal routes | direct inline (subagent transport unavailable — free tier) | done (a71e18b; router-root Seo.tsx index-only PUBLIC_SEO routes, fail-closed noindex static+cleanup, index.html noindex default, PublicLayout+About/Help/Contact pages, robots.txt allowlist, sitemap.xml; SITE_URL placeholder cargo-control.example.com in config/seo.ts; "/" excluded from sitemap — client-redirects; risk medium, build+tsc+lint OK) |
-| T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | direct inline (subagent transport unavailable — free tier) | in_progress — Tanda 1 lista (0029cac): vitest 4 + testing-library + jsdom; 102 tests en lib (viewport/units/csv/guards I1..I7/ocupación), map shared (estadoOperativo/mapControls), hooks (debounce/localStorage/mediaQuery/viewport). Fix 2 bugs de prod: zoomAtPoint reseteaba pan a (0,0); guardI5Estado ignoraba destinoLocationId (precedencia `??`). Fallta: servicios demo/adapters, páginas cargo/trucks/audit/reports, RLS (requiere supabase local — NO instalado en este entorno) |
+| T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | direct inline (subagent transport unavailable — free tier) | in_progress — Tanda 1 (0029cac): vitest 4 + testing-library + jsdom; 102 tests lib/hooks/map + fix 2 bugs prod (zoomAtPoint, guardI5Estado). Tanda 2 (e7083f2): 121 tests — motor demo (RBAC viewer, ME-07 idempotencia, discharge/split/transfer/egress, egress con retenidos AC-E2-2, arrival previo, audit trail), agregados dashboard/reportes (golden: stored 800u/4030kg, holds 50+200, scan 30, sector-01=500u). Falta: authService, layoutService, stationService (scanner/scale), holdService release, páginas RTL, RLS (requiere supabase local — NO instalado) |
 | T18 | Performance: lazy loading, code splitting, pagination, debounce, memoization, aggregations, map partial updates | delegated | pending |
 | T19 | Final audit: documentation vs implementation report (senior arch/front/back/QA/UX/security), then fix findings | delegated | pending |
 | T20 | Map truck finder: right-side panel with debounced plate/company search listing every truck with its derived location, click centers the map on its chip; chip follows derived state to owning sector (playón/balanza/scanner/rezago/secuestro) | delegated | done (1d05c4c + refinements: 879588f chips inside sector, a49734a column-fill top-left, 8a2e7ff chip follows derived state) |
@@ -194,14 +194,35 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   I5_DESTINO_SIN_HOLD inertes); fix igualar I3 con paréntesis. Nota:
   roles usan 'operator' (no 'operador'); LocationType no tiene 'storage'
   (zone|bin|playon|checkpoint).
+- 2026-09-23 (sesión tests): T17 tanda 2 (e7083f2). Integración motor demo
+  (services/demo/adapters.test.ts): RBAC viewer → MovementEngineError;
+  movimientoPermitido por rol; ME-07 operation_key → duplicado:true + 1
+  sola fila; discharge muta lote → discharged/playon/truck null + manifest
+  discharged; split → parent -cantidad + child con parent_lot_id +
+  created_via_movement_id; split cantidad==total o lote retenido →
+  error; transfer mueve lote (requiere discharge previo — lot-1-1 seed es
+  on_truck); egress con retenidos (manifest-1 rezago, manifest-2 secuestro)
+  → rechazado AC-E2-2; egress limpio → payload acknowledged_on_truck_lots
+  + manifest NO closed + doble egress → error; egress sin arrival previo →
+  error; audit trail movimiento.discharge con before/after. Agregados
+  (aggregates.test.ts): métricas golden (stored 800u / 4030kg, rezago 50,
+  secuestro 200, scanner 30, scale 0, yard>=2, sectores ocupados),
+  dayBucketKey UTC, snapshot sector-01=500u, serie arrivals >= 2 filas,
+  merchandise_processed total>0, demoLotes, total auditoría>0. Notas
+  API: AuditService.listarAudit devuelve {filas,total} (no rows);
+  computarSerieDemo(state, tipo, filtros) devuelve SerieFila[] (no
+  objeto); DEMO_FACILITY_ID='fac-demo'; ManifestInsert requiere
+  facility_id. TSC+lint+build green, risk medium.
 
 ## Next step
 
-T17 — continuar cobertura frontend: servicios demo/adapters (motor
-in-memory), páginas cargo/trucks/audit/reports (Testing Library),
-negativos en guards. La capa RLS/isolation queda pendiente hasta
-instalar supabase CLI + Docker (ver docs/qa/strategy.md «Database /
-Isolation»). Después T18 Performance → T19 Final audit.
+T17 — tanda 3: authService (sesión demo, roles), layoutService (diff,
+versiones, publicar/restaurar), stationService (scan/scale con
+operation_key), holdService (release supervisor), páginas clave con
+Testing Library (login DEMO, dashboard, manifests). La capa RLS/isolation
+queda pendiente hasta instalar supabase CLI + Docker (ver
+docs/qa/strategy.md «Database / Isolation»). Después T18 Performance →
+T19 Final audit.
 
 ## Route declarations
 
