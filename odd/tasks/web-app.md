@@ -268,13 +268,24 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   historial append-only → findAllByText/queryAllByText, nunca getByText.
   184 tests / 23 archivos. TSC+lint+build green (warnings preexistentes),
   risk medium, 400 líneas.
+- T17 — tanda 7 done (b95e395): ReportsPage.test.tsx (4; tab inicial Camiones con
+  trucks seed DEMO-01-AA, CSV export aria-label 'Exportar Camiones a CSV', switch
+  tab Ocupación re-query, tabs ocultos sin permiso del reporte — no leak parcial,
+  sin permisos → 'Reportes no disponibles'), AuditPage.test.tsx (2; filas audit seed
+  #1/truck-2/manifest-1, drawer detalle via TableRow aria-label — NOT button; drawer
+  es role=dialog 'Evento de auditoría' y necesita MemoryRouter por Link timeline),
+  TrucksPage.test.tsx (3; placas DEMO-01/02/03, botón 'Nuevo' solo con truck.create),
+  CargoPage.test.tsx (3; ManifestDetail manifest-1 header + placa DEMO-02-BB en
+  header Y items → findAllByText, gating 'Agregar ítem'(cargo.update)/'Descargar'
+  (cargo.transfer)). 196 tests / 27 archivos. TSC+lint+build green, risk medium,
+  300 líneas.
 
 ## Next step
 
-T17 — tanda 7 (opcional): RTL restante (WarehousePage layout, TrucksPage,
-CargoPage, ReportsPage/AuditPage, SettingsPage), luego RLS/isolation
-pendiente hasta instalar supabase CLI + Docker (ver docs/qa/strategy.md
-«Database / Isolation»). Después T18 Performance → T19 Final audit.
+T17 — tanda 8 (opcional): SettingsPage, WarehousePage (stub ModuleStubPage),
+404/Forbidden, luego RLS/isolation pendiente hasta instalar supabase CLI +
+Docker (ver docs/qa/strategy.md «Database / Isolation»). Después T18 Performance
+→ T19 Final audit.
 
 ## Route declarations
 
