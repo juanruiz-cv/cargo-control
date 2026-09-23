@@ -112,7 +112,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | delegated | pending |
 | T18 | Performance: lazy loading, code splitting, pagination, debounce, memoization, aggregations, map partial updates | delegated | pending |
 | T19 | Final audit: documentation vs implementation report (senior arch/front/back/QA/UX/security), then fix findings | delegated | pending |
-| T20 | Map truck finder: right-side panel with debounced plate/company search listing every truck with its derived location, click centers the map on its chip | delegated | done (1d05c4c) |
+| T20 | Map truck finder: right-side panel with debounced plate/company search listing every truck with its derived location, click centers the map on its chip; chip follows derived state to owning sector (playón/balanza/scanner/rezago/secuestro) | delegated | done (1d05c4c + refinements: 879588f chips inside sector, a49734a column-fill top-left, 8a2e7ff chip follows derived state) |
 
 ## Progress
 
@@ -140,13 +140,26 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   AuthProvider/useAuth, RequireAuth/RequirePermission, sidebar filtrado,
   /403, forgot+reset, perfil read-only); mapa permisos verificado contra
   authentication.md §Guard table.
+- 2026-09-22 (sesión mapa operativo): T20 done — truck finder panel
+  (1d05c4c: búsqueda debounced 300ms por patente/transportista sobre
+  catálogo completo, badge estado derivado + hint ubicación, click =
+  marcar en mapa + botón Detalle → /trucks/:id, superficie truck.read).
+  Refinamientos de chips: 879588f (chips DENTRO de la caja del sector,
+  antes quedaban debajo del borde), a49734a (column-fill desde esquina
+  superior izquierda), 8a2e7ff (chip sigue el estado derivado al sector
+  dueño: playón/balanza/scanner/rezago/secuestro vía SECTOR_POR_ESTADO,
+  fallback playón si el layout no tiene ese tipo). Spec actualizado
+  (docs/ux/operational-map.md §Playón chips + §Truck finder panel).
+  Verificación por commit: tsc+lint+build verdes, risk medium, spot OK.
 
 ## Next step
 
-T7 — Floor plan: layout editor + operational map
-(docs/architecture/floor-plan-editor.md, floor-plan-versioning.md,
-operational-map.md + domain/entities.md + brand/ux). Delegar a writer con
-docs como spec.
+T15 — Responsive: tablet (768–1023) necesita icon rail persistente de
+56px (hoy cae al drawer off-canvas móvil); desktop-first, datos
+preservados, breakpoints ya tokens en index.css
+(--breakpoint-md:768/lg:1024/xl:1600). Spec:
+docs/ux/responsive-mobile.md. Después T16 SEO → T17 Tests → T18
+Performance → T19 Final audit.
 
 ## Route declarations
 
