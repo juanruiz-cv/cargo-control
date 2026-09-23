@@ -107,7 +107,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T12 | Dashboard: real aggregates (queries with aggregation, not full history to browser) | delegated | done (b17b1a7) |
 | T13 | Audit module: AuditLog list/details/filters/timeline, read-only for normal users | delegated | done (e86b535) |
 | T14 | Reports: truck/entries/exits/cargo/movements/occupancy/scanner/scale/quarantine/seizure/audit, filters + CSV export | delegated | done (2fa99b3) |
-| T15 | Responsive: desktop-first, tablet (icon rail, data preserved, write path identical), breakpoints via tokens | delegated | pending |
+| T15 | Responsive: desktop-first, tablet (icon rail, data preserved, write path identical), breakpoints via tokens | direct inline (subagent transport unavailable — free tier) | done (dd261a1; tablet 768–1023 forced 56px icon rail via effectiveCollapsed, burger md:hidden, overlay md:hidden, desktop collapse pref untouched, no localStorage writes during tablet range; risk medium, build+tsc+lint OK, md: utilities verified in production CSS) |
 | T16 | SEO: public pages only (/, /login, /about, /help, /contact), robots.txt, sitemap, OG, noindex internal routes | delegated | pending |
 | T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | delegated | pending |
 | T18 | Performance: lazy loading, code splitting, pagination, debounce, memoization, aggregations, map partial updates | delegated | pending |
@@ -151,15 +151,19 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   fallback playón si el layout no tiene ese tipo). Spec actualizado
   (docs/ux/operational-map.md §Playón chips + §Truck finder panel).
   Verificación por commit: tsc+lint+build verdes, risk medium, spot OK.
+- 2026-09-22 (sesión responsive): T15 done (dd261a1). Tablet 768–1023
+  ahora muestra icon rail persistente de 56px (responsive-mobile.md §2)
+  en vez de caer al drawer móvil: AppShell fuerza effectiveCollapsed en
+  tablet (sin escribir la pref de collapse), Sidebar pasa a static desde
+  md (antes lg), burger y overlay pasan a md:hidden. Desktop conserva la
+  toggle collapse optimista local. Verificado: tsc+lint+build OK,
+  risk medium, utilities md: presentes en CSS de producción.
 
 ## Next step
 
-T15 — Responsive: tablet (768–1023) necesita icon rail persistente de
-56px (hoy cae al drawer off-canvas móvil); desktop-first, datos
-preservados, breakpoints ya tokens en index.css
-(--breakpoint-md:768/lg:1024/xl:1600). Spec:
-docs/ux/responsive-mobile.md. Después T16 SEO → T17 Tests → T18
-Performance → T19 Final audit.
+T16 — SEO: public pages only (/, /login, /about, /help, /contact),
+robots.txt, sitemap, OG tags, noindex internal routes. Después T17
+Tests → T18 Performance → T19 Final audit.
 
 ## Route declarations
 
