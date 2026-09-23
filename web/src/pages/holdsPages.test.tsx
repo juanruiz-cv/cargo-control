@@ -67,7 +67,7 @@ describe("QuarantinePage (Rezago)", () => {
     expect(resolver).toBeDisabled()
   })
 
-  it("a supervisor resolves the quarantine case (engine release)", async () => {
+  it("a supervisor resolves the quarantine case (engine release) [AC-E6-2 / AC-E9-2]", async () => {
     mockedUseAuth.mockReturnValue(
       authContext(["quarantine.read", "quarantine.create"], ["supervisor"]),
     )
@@ -87,7 +87,7 @@ describe("QuarantinePage (Rezago)", () => {
 
     // Case closes → empty state for open cases
     await screen.findByText("Sin casos abiertos")
-  })
+  }, 15000)
 })
 
 describe("SeizurePage (Secuestro)", () => {

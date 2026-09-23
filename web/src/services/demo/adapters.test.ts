@@ -147,7 +147,7 @@ describe("demo movement engine — discharge mutation", () => {
 })
 
 describe("demo split (full in-memory, deferred-Σ is a DB concern)", () => {
-  it("reduces the parent and creates a child lot with parent_lot_id", async () => {
+  it("reduces the parent and creates a child lot with parent_lot_id [AC-E3-1 / AC-E3-4]", async () => {
     const svc = fresh()
     const antes = await svc.cargo.obtenerManifest("manifest-1")
     const sector = antes?.items
@@ -228,7 +228,7 @@ describe("demo transfer", () => {
   })
 })
 
-describe("demo egress guard (AC-E2-2)", () => {
+describe("demo egress guard (AC-E7-2 freeze → egress blocked; AC-E9-2 audit)", () => {
   it("blocks egress while the manifest has frozen lots (quarantine/seizure)", async () => {
     const svc = fresh()
     await expect(svc.trucks.registrarSalida("manifest-1")).rejects.toThrow(/retenidos/)
@@ -281,7 +281,7 @@ describe("demo egress guard (AC-E2-2)", () => {
 })
 
 describe("demo audit trail", () => {
-  it("appends audit rows for engine mutations with canonical catalog codes", async () => {
+  it("appends audit rows for engine mutations with canonical catalog codes [AC-E9-2]", async () => {
     const svc = fresh()
     await execute(svc, {
       kind: "discharge",

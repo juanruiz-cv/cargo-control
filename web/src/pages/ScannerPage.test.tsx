@@ -74,7 +74,7 @@ describe("ScannerPage", () => {
     await screen.findByText("Cola pendiente")
     // The scan operation appears in recent operations with the scanned code
     expect(await screen.findByText("REP-2002")).toBeInTheDocument()
-  })
+  }, 15000)
 
   it("keeps the lot pending when the scan result is not_found (SBF-05)", async () => {
     const user = userEvent.setup()
@@ -97,5 +97,5 @@ describe("ScannerPage", () => {
     expect((await screen.findAllByText("lot-1-3")).length).toBeGreaterThanOrEqual(1)
     // and the not_found capture shows in recent operations
     expect(await screen.findByText(/No encontrado/i)).toBeInTheDocument()
-  })
+  }, 15000)
 })

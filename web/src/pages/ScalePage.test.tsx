@@ -65,7 +65,7 @@ describe("ScalePage", () => {
     expect(screen.getByRole("button", { name: /Pesar/i })).toBeDisabled()
   })
 
-  it("registers a weigh within tolerance and persists the operation row", async () => {
+  it("registers a weigh within tolerance and persists the operation row [AC-E5-2]", async () => {
     const user = userEvent.setup()
     await sembrarColaBalanza()
     render(<ScalePage />)
@@ -88,7 +88,7 @@ describe("ScalePage", () => {
     expect(await screen.findByText("Dentro de tolerancia")).toBeInTheDocument()
   }, 15000)
 
-  it("keeps the lot pending when the weigh is outside tolerance (SBF-08)", async () => {
+  it("keeps the lot pending when the weigh is outside tolerance (SBF-08) [AC-E5-2]", async () => {
     const user = userEvent.setup()
     await sembrarColaBalanza()
     render(<ScalePage />)

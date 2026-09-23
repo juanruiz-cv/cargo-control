@@ -282,7 +282,7 @@ describe("I2 cantidades", () => {
     expect(nan.find((r) => r.guard === "I2")!.code).toBe("I2_CANTIDAD_INVALIDA")
   })
 
-  it("split debe dejar remanente (cantidad < lote)", () => {
+  it("split debe dejar remanente (cantidad < lote) [AC-E2-2 / AC-E3-1 / AC-E3-4]", () => {
     const rs = validarMovimiento(candidato({ kind: "split", items: [itemLote({ cantidad: 100 })] }), okCtx())
     expect(rs.find((r) => r.guard === "I2")!.code).toBe("I2_SPLIT_SIN_REMANENTE")
     const okSplit = validarMovimiento(candidato({ kind: "split", items: [itemLote({ cantidad: 99 })] }), okCtx())
@@ -294,7 +294,7 @@ describe("I2 cantidades", () => {
     expect(rs.find((r) => r.guard === "I2")!.code).toBe("I2_CANTIDAD_EXCEDE_LOTE")
   })
 
-  it("discharge opera lote completo (no parcial)", () => {
+  it("discharge opera lote completo (no parcial) [AC-E2-2 — partial discharge via split, never direct]", () => {
     const rs = validarMovimiento(
       candidato({
         kind: "discharge",
@@ -383,7 +383,7 @@ describe("I5 estado lote/ubicación", () => {
     expect(rs.find((r) => r.guard === "I5")!.code).toBe("I5_LOTE_INEXISTENTE")
   })
 
-  it("lote congelado rechaza movimientos normales (ME-20/21)", () => {
+  it("lote congelado rechaza movimientos normales (ME-20/21) [AC-E7-2 seizure freeze]", () => {
     const rs = validarMovimiento(
       candidato(),
       ctx({
@@ -405,7 +405,7 @@ describe("I5 estado lote/ubicación", () => {
     expect(rs.find((r) => r.guard === "I5")!.code).toBe("I5_LOTE_NO_EN_CAMION")
   })
 
-  it("release sin caso abierto falla con I5_SIN_CASO_ABIERTO", () => {
+  it("release sin caso abierto falla con I5_SIN_CASO_ABIERTO [AC-E6-2 rezago resolution]", () => {
     const rs = validarMovimiento(
       candidato({
         kind: "release",
@@ -505,7 +505,7 @@ describe("I6 secuencia / flujo", () => {
     expect(rs.find((r) => r.guard === "I6")!.code).toBe("I6_SIN_INGRESO")
   })
 
-  it("correction requiere previous_movement_id y no lleva items", () => {
+  it("correction requiere previous_movement_id y no lleva items [AC-E8-3 correction integrity]", () => {
     const sinOrigen = validarMovimiento(candidato({ kind: "correction", items: [], previousMovementId: null, motivo: "Error" }), ctx())
     expect(sinOrigen.find((r) => r.guard === "I6")!.code).toBe("I6_CORRECCION_SIN_ORIGEN")
 
