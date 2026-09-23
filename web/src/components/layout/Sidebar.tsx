@@ -37,7 +37,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile }: SidebarProps) 
         <button
           type="button"
           aria-label="Cerrar menú de navegación"
-          className="fixed inset-0 z-(--cc-z-overlay) cursor-default bg-black/30 lg:hidden"
+          className="fixed inset-0 z-(--cc-z-overlay) cursor-default bg-black/30 md:hidden"
           onClick={onCloseMobile}
           tabIndex={-1}
         />
@@ -45,8 +45,8 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile }: SidebarProps) 
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-(--cc-z-drawer) flex w-60 flex-col border-r border-border bg-surface transition-transform duration-(--cc-motion-base) motion-reduce:transition-none lg:static lg:z-auto lg:translate-x-0",
-          collapsed && "w-14 lg:w-14",
+          "fixed inset-y-0 left-0 z-(--cc-z-drawer) flex w-60 flex-col border-r border-border bg-surface transition-transform duration-(--cc-motion-base) motion-reduce:transition-none md:static md:z-auto md:translate-x-0",
+          collapsed && "w-14",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
         aria-label="Navegación principal"

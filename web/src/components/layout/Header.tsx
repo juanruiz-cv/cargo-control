@@ -43,11 +43,14 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-(--cc-z-sticky) flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3 md:px-4">
+      {/* Mobile (<768) uses the off-canvas drawer; tablet (>=768) shows the
+          persistent icon rail, so no burger — and no collapse toggle
+          either: the rail collapses chrome, never data (ADR 0018). */}
       <Button
         type="button"
         variant="ghost"
         size="icon-sm"
-        className="lg:hidden"
+        className="md:hidden"
         onClick={onToggleMobile}
         aria-label="Abrir menú de navegación"
       >

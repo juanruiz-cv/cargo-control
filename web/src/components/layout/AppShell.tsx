@@ -8,21 +8,27 @@ import { useLocalStorage } from "@/hooks/useLocalStorage"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 
 const DESKTOP_QUERY = "(min-width: 1024px)"
+const TABLET_QUERY = "(min-width: 768px) and (max-width: 1023px)"
 
 /**
  * Application shell: sidebar + header + main (professional-ux.md §1).
  * - Sidebar collapse is a local preference (optimistic-safe).
  * - Mobile navigation is off-canvas; Esc closes the overlay.
+ * - Tablet (768–1023) forces the icon rail (responsive-mobile.md §2):
+ *   the local `collapsed` preference is never written during that range.
  * - Global keyboard navigation per the shortcuts table.
  */
 export function AppShell() {
   const [collapsed, setCollapsed] = useLocalStorage("cc.sidebar.collapsed", false)
   const isDesktop = useMediaQuery(DESKTOP_QUERY)
+  const isTablet = useMediaQuery(TABLET_QUERY)
   const [mobileOpen, setMobileOpen] = useState(false)
   const navigate = useNavigate()
 
-  // The off-canvas nav only applies below the desktop breakpoint.
-  const mobileNavOpen = mobileOpen && !isDesktop
+  // The off-canvas nav only applies below the tablet breakpoint; tablet
+  // always shows the persistent icon rail (responsive-mobile.md §2).
+  const mobileNavOpen = mobileOpen && !isDesktop && !isTablet
+  const effectiveCollapsed = isTablet ? true : collapsed
 
   useEffect(() => {
     if (!mobileNavOpen) return
@@ -70,7 +76,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-dvh w-full bg-background">
       <Sidebar
-        collapsed={collapsed}
+        collapsed={effectiveCollapsed}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileOpen(false)}
       />
