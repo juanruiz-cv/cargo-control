@@ -109,7 +109,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T14 | Reports: truck/entries/exits/cargo/movements/occupancy/scanner/scale/quarantine/seizure/audit, filters + CSV export | delegated | done (2fa99b3) |
 | T15 | Responsive: desktop-first, tablet (icon rail, data preserved, write path identical), breakpoints via tokens | direct inline (subagent transport unavailable — free tier) | done (dd261a1; tablet 768–1023 forced 56px icon rail via effectiveCollapsed, burger md:hidden, overlay md:hidden, desktop collapse pref untouched, no localStorage writes during tablet range; risk medium, build+tsc+lint OK, md: utilities verified in production CSS) |
 | T16 | SEO: public pages only (/, /login, /about, /help, /contact), robots.txt, sitemap, OG, noindex internal routes | direct inline (subagent transport unavailable — free tier) | done (a71e18b; router-root Seo.tsx index-only PUBLIC_SEO routes, fail-closed noindex static+cleanup, index.html noindex default, PublicLayout+About/Help/Contact pages, robots.txt allowlist, sitemap.xml; SITE_URL placeholder cargo-control.example.com in config/seo.ts; "/" excluded from sitemap — client-redirects; risk medium, build+tsc+lint OK) |
-| T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | direct inline (subagent transport unavailable — free tier) | in_progress — Tanda 1 (0029cac): vitest 4 + testing-library + jsdom; 102 tests lib/hooks/map + fix 2 bugs prod (zoomAtPoint, guardI5Estado). Tanda 2 (e7083f2): 121 tests — motor demo (RBAC viewer, ME-07 idempotencia, discharge/split/transfer/egress, egress con retenidos AC-E2-2, arrival previo, audit trail), agregados dashboard/reportes (golden: stored 800u/4030kg, holds 50+200, scan 30, sector-01=500u). Tanda 3 (8093149): auth (login/roles/permisos, credenciales malas, sign-out, operator pin), holds (open view, resolve quarantine, engine release resuelve op + lot released + caso cerrado). Tanda 4 (1696916): stations (cola scan seed, scan_in → checked, SBF-05 no avanza, escala), layout diffs puros + versiones demo (create/publicar/restaurar), LoginPage RTL (demo button, errores inline, redirect), kpiCards (gating por permiso, formato es-AR). 155 tests / 17 archivos. Falta: páginas RTL (dashboard, manifests), RLS (requiere supabase local — NO instalado) |
+| T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | direct inline (subagent transport unavailable — free tier) | in_progress — Tanda 1 (0029cac): vitest 4 + testing-library + jsdom; 102 tests lib/hooks/map + fix 2 bugs prod (zoomAtPoint, guardI5Estado). Tanda 2 (e7083f2): 121 tests — motor demo (RBAC viewer, ME-07 idempotencia, discharge/split/transfer/egress, egress con retenidos AC-E2-2, arrival previo, audit trail), agregados dashboard/reportes (golden: stored 800u/4030kg, holds 50+200, scan 30, sector-01=500u). Tanda 3 (8093149): auth (login/roles/permisos, credenciales malas, sign-out, operator pin), holds (open view, resolve quarantine, engine release resuelve op + lot released + caso cerrado). Tanda 4 (1696916): stations (cola scan seed, scan_in → checked, SBF-05 no avanza, escala), layout diffs puros + versiones demo (create/publicar/restaurar), LoginPage RTL (demo button, errores inline, redirect), kpiCards (gating por permiso, formato es-AR). Tanda 5 (3d651f4): DashboardPage RTL (KPIs demo real, charts, ocupación, refresh, gating sin permisos), ManifestList RTL (seed, búsqueda, Nuevo con cargo.create). 167 tests / 19 archivos. Falta: RLS (requiere supabase local — NO instalado) |
 | T18 | Performance: lazy loading, code splitting, pagination, debounce, memoization, aggregations, map partial updates | delegated | pending |
 | T19 | Final audit: documentation vs implementation report (senior arch/front/back/QA/UX/security), then fix findings | delegated | pending |
 | T20 | Map truck finder: right-side panel with debounced plate/company search listing every truck with its derived location, click centers the map on its chip; chip follows derived state to owning sector (playón/balanza/scanner/rezago/secuestro) | delegated | done (1d05c4c + refinements: 879588f chips inside sector, a49734a column-fill top-left, 8a2e7ff chip follows derived state) |
@@ -238,14 +238,30 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   se cero. 155 tests / 17 archivos. Tipos: LayoutFiltros usa
   facilidadId; ComputarDiffLayoutContext usa facilityId; AuthContextValue
   vive en auth-context (no useAuth). TSC+lint+build green, risk medium.
+- 2026-09-23 (sesión tests): T17 tanda 5 (3d651f4). DashboardPage.test.tsx
+  (7 tests RTL con demo backend real + useAuth mockeado): KPIs con valores
+  golden es-AR (800, Mercadería almacenada, Camiones en playa),
+  badge Demo + 4 charts role="img" (Ingresos de camiones por día),
+  ocupación role="table" (no img), refresh → revision++,
+  select ventana 7 días, sin permisos → 'Sin permisos de dashboard',
+  gating por módulo (sin truck.read → sin Camiones en playa).
+  ManifestList.test.tsx (5 tests RTL): lista manifests seed
+  (MANIF-2026-0918-A / MANIF-2026-0919-B, ambos in_playon → 'En playa'),
+  búsqueda client-side debounce 300ms (query sin match → 'Resultados: 0'),
+  botón Nuevo solo con cargo.create, cards son <Link> con nombre accesible
+  = código del manifest (to=/cargo/:id). 167 tests / 19 archivos.
+  Notas API: PermissionCode NO tiene 'reports.read' (módulo audit es lo
+  máximo); OcupacionBars es role="table"; ManifestStatusBadge rollup usa
+  mismo label que MANIFEST_STATUS_LABELS. TSC+lint+build green, risk
+  medium.
 
 ## Next step
 
-T17 — tanda 5: páginas RTL restantes (DashboardPage con mock de charts o
-kpisVisibles ya cubierto — next: DashboardCharts smoke o manifests),
-luego RLS/isolation pendiente hasta instalar supabase CLI + Docker (ver
-docs/qa/strategy.md «Database / Isolation»). Después T18 Performance →
-T19 Final audit.
+T17 — tanda 6: cubrir las páginas de operaciones que quedan con RTL
+(ScannerPage, ScalePage, MovementsPage, QuarantinePage/SeizurePage) con
+el demo backend real, luego RLS/isolation pendiente hasta instalar
+supabase CLI + Docker (ver docs/qa/strategy.md «Database / Isolation»).
+Después T18 Performance → T19 Final audit.
 
 ## Route declarations
 
