@@ -279,13 +279,21 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   header Y items → findAllByText, gating 'Agregar ítem'(cargo.update)/'Descargar'
   (cargo.transfer)). 196 tests / 27 archivos. TSC+lint+build green, risk medium,
   300 líneas.
+- T17 — tanda 8 done (aec57da): settingsAndErrors.test.tsx (7 tests):
+  SettingsPage (3; identidad Demo User/demo@..., ROLE_LABELS 'Operador de patio'
+  y 'Supervisor' — NO códigos crudos, permisos mono, bandera demo, placeholders
+  vacíos), NotFoundPage (1; 'Página no encontrada' + Link a /dashboard),
+  ForbiddenPage (1; 'Acceso restringido' + Link), WarehousePage (1; stub 'Planta'
+  con ModuleStubPage — usa useLocation → MemoryRouter). Fix escala: tests con
+  userEvent bajo carga paralela → timeout 15000 en los 2 tests de pesaje
+  (flaky 5s default). 202 tests / 28 archivos. TSC+lint+build green, risk
+  medium, 121 líneas.
 
 ## Next step
 
-T17 — tanda 8 (opcional): SettingsPage, WarehousePage (stub ModuleStubPage),
-404/Forbidden, luego RLS/isolation pendiente hasta instalar supabase CLI +
-Docker (ver docs/qa/strategy.md «Database / Isolation»). Después T18 Performance
-→ T19 Final audit.
+T17 frontend completo (202 tests RTL + puros). RLS/isolation pendiente hasta
+instalar supabase CLI + Docker (docs/qa/strategy.md «Database / Isolation»).
+Después T18 Performance → T19 Final audit.
 
 ## Route declarations
 
