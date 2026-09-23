@@ -108,7 +108,7 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
 | T13 | Audit module: AuditLog list/details/filters/timeline, read-only for normal users | delegated | done (e86b535) |
 | T14 | Reports: truck/entries/exits/cargo/movements/occupancy/scanner/scale/quarantine/seizure/audit, filters + CSV export | delegated | done (2fa99b3) |
 | T15 | Responsive: desktop-first, tablet (icon rail, data preserved, write path identical), breakpoints via tokens | direct inline (subagent transport unavailable — free tier) | done (dd261a1; tablet 768–1023 forced 56px icon rail via effectiveCollapsed, burger md:hidden, overlay md:hidden, desktop collapse pref untouched, no localStorage writes during tablet range; risk medium, build+tsc+lint OK, md: utilities verified in production CSS) |
-| T16 | SEO: public pages only (/, /login, /about, /help, /contact), robots.txt, sitemap, OG, noindex internal routes | delegated | pending |
+| T16 | SEO: public pages only (/, /login, /about, /help, /contact), robots.txt, sitemap, OG, noindex internal routes | direct inline (subagent transport unavailable — free tier) | done (a71e18b; router-root Seo.tsx index-only PUBLIC_SEO routes, fail-closed noindex static+cleanup, index.html noindex default, PublicLayout+About/Help/Contact pages, robots.txt allowlist, sitemap.xml; SITE_URL placeholder cargo-control.example.com in config/seo.ts; "/" excluded from sitemap — client-redirects; risk medium, build+tsc+lint OK) |
 | T17 | Tests: auth, authorization, RLS, RBAC, trucks, cargo, split, movements, capacity, layout, scanner, scale, quarantine, seizure, audit, reports; negative cases | delegated | pending |
 | T18 | Performance: lazy loading, code splitting, pagination, debounce, memoization, aggregations, map partial updates | delegated | pending |
 | T19 | Final audit: documentation vs implementation report (senior arch/front/back/QA/UX/security), then fix findings | delegated | pending |
@@ -158,12 +158,26 @@ per ADR 0021. PR/push/merge remain maintainer decisions.
   md (antes lg), burger y overlay pasan a md:hidden. Desktop conserva la
   toggle collapse optimista local. Verificado: tsc+lint+build OK,
   risk medium, utilities md: presentes en CSS de producción.
+- 2026-09-23 (sesión SEO): T16 done (a71e18b). Superficie pública
+  indexable = /login, /about, /help, /contact (la "/" fue excluida del
+  sitemap — redirige client-side a /dashboard o /login; decisión
+  registrada en config/seo.ts). Seo.tsx en la raíz del router:
+  PUBLIC_SEO → index,follow + title/desc/canonical/og:url; resto →
+  noindex,nofollow + cleanup restaura el default; index.html lleva
+  noindex estático fail-closed. Páginas nuevas About/Help/Contact bajo
+  PublicLayout (header marca + nav pública + CTA login + footer);
+  /help lista atajos desde NAV_GROUPS (sin duplicar). robots.txt
+  allowlist de las 4 + sitemap.xml. SITE_URL placeholder
+  https://cargo-control.example.com centralizado (mantainer choice) —
+  al elegir el dominio real: actualizar config/seo.ts + sitemap.xml +
+  robots.txt. og:image omitido hasta tener PNG/JPG de marca (los
+  scraper no aceptan SVG). Verificado: tsc+lint+build OK, risk medium.
 
 ## Next step
 
-T16 — SEO: public pages only (/, /login, /about, /help, /contact),
-robots.txt, sitemap, OG tags, noindex internal routes. Después T17
-Tests → T18 Performance → T19 Final audit.
+T17 — Tests: auth, authorization, RLS, RBAC, trucks, cargo, split,
+movements, capacity, layout, scanner, scale, quarantine, seizure, audit,
+reports; negative cases. Después T18 Performance → T19 Final audit.
 
 ## Route declarations
 
