@@ -500,8 +500,10 @@ function guardI5Estado(c: EngineCandidate, ctx: ValidationContext): GuardResult 
   }
 
   // Destination state (ME-22): active location; holds need allows_hold.
+  // NOTE: parentheses around the ternary are REQUIRED — `??` binds tighter
+  // than `?:`, so without them the item destino is always bypassed.
   for (const it of items) {
-    const destino = it.destinoLocationId ?? items.length === 1 ? c.locationId ?? null : null
+    const destino = it.destinoLocationId ?? (items.length === 1 ? c.locationId ?? null : null)
     if (!destino) continue
     const loc = ctx.locations.get(destino)
     if (!loc || !loc.active) {

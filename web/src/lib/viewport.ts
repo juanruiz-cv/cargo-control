@@ -59,11 +59,15 @@ export function screenToDoc(vp: Viewport, px: number, py: number): { x: number; 
  * Zoom keeping the document point under the cursor fixed. `factor > 1`
  * zooms in. Returns a new viewport whose `(px, py)` still maps to the
  * same document coordinates as before.
+ *
+ * Formula: with doc = (px - vp.x)/vp.zoom, the new offset must satisfy
+ * `doc * zoom + x = px`, so `x = px - doc * zoom`.
  */
 export function zoomAtPoint(vp: Viewport, factor: number, px: number, py: number): Viewport {
   const zoom = clampZoom(vp.zoom * factor)
-  const { x: dx, y: dy } = docToScreen(vp, (px - vp.x) / vp.zoom, (py - vp.y) / vp.zoom)
-  return { zoom, x: px - dx, y: py - dy }
+  const docX = (px - vp.x) / vp.zoom
+  const docY = (py - vp.y) / vp.zoom
+  return { zoom, x: px - docX * zoom, y: py - docY * zoom }
 }
 
 /**
