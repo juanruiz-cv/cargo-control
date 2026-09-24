@@ -531,7 +531,7 @@ create table public.item_lots (            -- quantum of traceability (ADR 0003)
   current_truck_id        uuid references public.trucks(id),
   unit_weight_kg          numeric,          -- optional override
   unit_volume_m3          numeric check (unit_volume_m3 is null or unit_volume_m3 > 0), -- Fase 5 (ADR 0006)
-  created_via_movement_id uuid,             -- FK added after movements exists
+  created_via_movement_id bigint,           -- FK added after movements exists
   created_at              timestamptz not null default now(),
   updated_at              timestamptz not null default now(),
   constraint lot_not_in_two_places check (
